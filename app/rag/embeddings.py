@@ -1,11 +1,11 @@
 """Module for building vector stores from repository documents."""
 
-from langchain.docstore.document import Document
-from langchain.vectorstores import FAISS
-from langchain.embeddings import HuggingFaceEmbeddings
+from langchain_core.documents import Document
+from langchain_community.vectorstores import FAISS
+from langchain_huggingface import HuggingFaceEmbeddings
 
 
-def build_vector_store(repo_documents: list[dict]) -> FAISS:
+def build_vector_store(repo_documents: list[dict[str,any]]) -> FAISS:
     """Build a FAISS vector store from repository documents. """
 
     documents = [
