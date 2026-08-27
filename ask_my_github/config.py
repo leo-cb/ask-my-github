@@ -40,7 +40,7 @@ class Settings(BaseSettings):
     max_concurrency: int = 8
     chunk_size: int = 1000
     chunk_overlap: int = 150
-    retriever_k: int = 4
+    retriever_k: int = 15
 
     langchain_api_key: str | None = None
     langchain_project: str = "ask-my-github"

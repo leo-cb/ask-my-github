@@ -79,6 +79,8 @@ def _format_response(question: str, answer: str, documents) -> dict:
             "path": document.metadata.get("path"),
             "language": document.metadata.get("language"),
             "url": document.metadata.get("url"),
+            "last_commit_date": document.metadata.get("last_commit_date"),
+            "repo_pushed_at": document.metadata.get("repo_pushed_at"),
         }
         for document in documents
     ]

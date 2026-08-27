@@ -173,6 +173,9 @@ class GitHubLoader:
         content = response.text
         if not content.strip():
             return None
+        last_commit_date = await self._fetch_last_commit_date(
+            client, semaphore, username, repo, path
+        )
         return Document(
             page_content=content,
             metadata={
@@ -182,8 +185,37 @@ class GitHubLoader:
                 "url": f"{repo['html_url']}/blob/{branch}/{path}",
                 "stars": repo.get("stargazers_count") or 0,
                 "description": repo.get("description") or "",
+                "last_commit_date": last_commit_date,
+                "repo_pushed_at": repo.get("pushed_at"),
+                "repo_updated_at": repo.get("updated_at"),
             },
         )
+
+    async def _fetch_last_commit_date(
+        self,
+        client: httpx.AsyncClient,
+        semaphore: asyncio.Semaphore,
+        username: str,
+        repo: dict,
+        path: str,
+    ) -> str | None:
+        """Return the ISO-8601 date of the last commit touching a file, or None."""
+        url = f"{GITHUB_API_BASE}/repos/{username}/{repo['name']}/commits"
+        params = {"path": path, "per_page": "1"}
+        async with semaphore:
+            response = await client.get(url, params=params)
+        if response.status_code != 200:
+            return None
+        await self._respect_rate_limit(response)
+        commits = response.json()
+        if not commits:
+            return None
+        commit = commits[0].get("commit", {})
+        for key in ("committer", "author"):
+            date = (commit.get(key) or {}).get("date")
+            if date:
+                return date
+        return None
 
     async def _respect_rate_limit(self, response: httpx.Response) -> None:
         remaining = int(response.headers.get("x-ratelimit-remaining", "0"))
