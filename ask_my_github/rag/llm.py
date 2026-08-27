@@ -7,20 +7,29 @@ from langchain_core.language_models.chat_models import BaseChatModel
 
 from ask_my_github.config import Settings, get_settings
 
-_FAST_DEFAULT_PROVIDER = "ollama"
-_AGENTIC_DEFAULT_PROVIDER = "openai"
+VALID_PROVIDERS = ("openai", "anthropic", "deepseek", "ollama")
 
 
 def get_fast_chat_model() -> BaseChatModel:
     """Return the chat model for the fast one-shot path."""
     settings = get_settings()
-    return _build_chat_model(settings, settings.llm_provider or _FAST_DEFAULT_PROVIDER)
+    return _build_chat_model(settings, _require_provider(settings))
 
 
 def get_agentic_chat_model() -> BaseChatModel:
     """Return the chat model for the agentic path."""
     settings = get_settings()
-    return _build_chat_model(settings, settings.llm_provider or _AGENTIC_DEFAULT_PROVIDER)
+    return _build_chat_model(settings, _require_provider(settings))
+
+
+def _require_provider(settings: Settings) -> str:
+    provider = settings.llm_provider
+    if not provider:
+        raise ValueError(
+            "LLM_PROVIDER is not set. Set it in .env to choose the model: "
+            + " | ".join(VALID_PROVIDERS)
+        )
+    return provider
 
 
 def _build_chat_model(settings: Settings, provider: str) -> BaseChatModel:

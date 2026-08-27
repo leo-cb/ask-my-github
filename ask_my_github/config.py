@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     github_token: str | None = None
     github_username: str | None = None
 
+    embedding_provider: str | None = None
     embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
     faiss_dir: str = "./data/faiss"
     max_file_bytes: int = 200_000

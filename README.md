@@ -37,10 +37,12 @@ Copy `.env.example` to `.env` and fill in what you need. Key variables:
 | Variable | Purpose | Default |
 |----------|---------|---------|
 | `IS_FAST_RAG` | `1` = fast one-shot; anything else = agentic | unset (agentic) |
-| `LLM_PROVIDER` | `openai` \| `anthropic` \| `deepseek` \| `ollama` | fast→ollama, agentic→openai |
+| `LLM_PROVIDER` | `openai` \| `anthropic` \| `deepseek` \| `ollama` | **required** (no default) |
 | `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` | cloud credentials | — |
 | `DEEPSEEK_API_KEY` / `DEEPSEEK_MODEL` | DeepSeek (OpenAI-compatible, tool-calling) | `deepseek-chat` |
 | `OLLAMA_MODEL` | any locally installed Ollama model (e.g. `qwen2.5-coder`) | `llama3.2` |
+| `EMBEDDING_PROVIDER` | `huggingface` (local) \| `openai` (cloud) \| `ollama` (local) | **required** (no default) |
+| `EMBEDDING_MODEL` | model for the embedding provider (sentence-transformers / `text-embedding-3-small` / `nomic-embed-text`) | `sentence-transformers/all-MiniLM-L6-v2` |
 | `GITHUB_TOKEN` | GitHub auth for higher rate limits | — |
 | `LANGCHAIN_API_KEY` | enables LangSmith tracing | — |
 
@@ -63,9 +65,9 @@ uvicorn ask_my_github.main:app --reload
 
 - The agentic path's ReAct tool fallback requires a **tool-calling-capable**
   model. The default agentic provider is OpenAI (`gpt-4o-mini`), which works out
-  of the box. If you switch the agentic path to Ollama, use a model that
-  supports function calling (e.g. `qwen2.5-coder`) — plain text models like
-  `llama3.2` won't work there.
+  of the box. If you switch the agentic path to Ollama, use a model with solid
+  tool-calling support (e.g. `qwen2.5-coder`). `llama3.2` supports tools too,
+  but smaller models can be unreliable at emitting valid tool calls.
 
 ## Project Structure
 
