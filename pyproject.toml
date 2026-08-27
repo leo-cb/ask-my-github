@@ -1,0 +1,26 @@
+[project]
+name = "ask-my-github"
+version = "0.1.0"
+description = "Fetches GitHub repositories for a user, loads README content, and builds a FAISS vector store with sentence-transformer embeddings."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "langchain",
+    "langchain-community",
+    "langchain-core",
+    "langchain-huggingface",
+    "langchain-ollama",
+    "sentence-transformers",
+    "faiss-cpu",
+    "fastapi",
+    "uvicorn",
+]
+
+[dependency-groups]
+dev = [
+    "pre-commit",
+]
+
+[tool.uv]
+# This project is not a distributable package; `app/` is imported as source.
+package = false
