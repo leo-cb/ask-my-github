@@ -11,14 +11,30 @@ Fetches GitHub repositories for a user, loads README content, and builds a FAISS
 
 ## Requirements
 
-- Python 3.12
+- Python 3.12+
+- [uv](https://docs.astral.sh/uv/) for dependency management
 - GitHub token (optional, recommended for higher rate limits)
 
 ## Install
 
 ```bash
-pip install -r requirements.txt
+uv sync
 ```
+
+This installs all dependencies into a virtual environment managed by `uv`.
+
+## Secret scanning (GitHub Actions)
+
+Secrets (API keys, tokens, passwords) are detected by
+[gitleaks-action](https://github.com/gitleaks/gitleaks-action), defined in
+[.github/workflows/gitleaks.yml](.github/workflows/gitleaks.yml). It runs on
+every push and pull request, and once daily on a schedule.
+
+There is nothing to install locally — the scan runs in GitHub Actions.
+
+- For personal accounts, no setup is required.
+- For organization accounts, a free `GITLEAKS_LICENSE` secret is required (see
+  [gitleaks.io](https://gitleaks.io/)).
 
 ## Usage
 
@@ -67,10 +83,19 @@ uvicorn app.main:app --reload
 
 ```
 app/
+  main.py
+  api/
+    ingest.py
+    query.py
   github/
     loader.py
   rag/
     embeddings.py
-requirements.in
-requirements.txt
+    prompt.py
+    retriever.py
+.github/
+  workflows/
+    gitleaks.yml
+pyproject.toml
+uv.lock
 ```

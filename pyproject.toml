@@ -16,11 +16,6 @@ dependencies = [
     "uvicorn",
 ]
 
-[dependency-groups]
-dev = [
-    "pre-commit",
-]
-
 [tool.uv]
 # This project is not a distributable package; `app/` is imported as source.
 package = false
