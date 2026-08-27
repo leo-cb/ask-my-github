@@ -34,7 +34,7 @@ class Settings(BaseSettings):
     github_username: str | None = None
 
     embedding_provider: str | None = None
-    embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
+    embedding_model: str = "jinaai/jina-embeddings-v2-base-code"
     faiss_dir: str = "./data/faiss"
     max_file_bytes: int = 200_000
     max_concurrency: int = 8

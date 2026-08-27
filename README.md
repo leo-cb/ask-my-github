@@ -41,8 +41,8 @@ Copy `.env.example` to `.env` and fill in what you need. Key variables:
 | `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` | cloud credentials | — |
 | `DEEPSEEK_API_KEY` / `DEEPSEEK_MODEL` | DeepSeek (OpenAI-compatible, tool-calling) | `deepseek-chat` |
 | `OLLAMA_MODEL` | any locally installed Ollama model (e.g. `qwen2.5-coder`) | `llama3.2` |
-| `EMBEDDING_PROVIDER` | `huggingface` (local) \| `openai` (cloud) \| `ollama` (local) | **required** (no default) |
-| `EMBEDDING_MODEL` | model for the embedding provider (sentence-transformers / `text-embedding-3-small` / `nomic-embed-text`) | `sentence-transformers/all-MiniLM-L6-v2` |
+| `EMBEDDING_PROVIDER` | `fastembed` (local, ONNX) \| `openai` (cloud) | **required** (no default) |
+| `EMBEDDING_MODEL` | model for the embedding provider (fastembed / `text-embedding-3-small`) | `jinaai/jina-embeddings-v2-base-code` |
 | `GITHUB_TOKEN` | GitHub auth for higher rate limits | — |
 | `LANGCHAIN_API_KEY` | enables LangSmith tracing | — |
 

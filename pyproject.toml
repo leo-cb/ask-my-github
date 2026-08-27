@@ -8,7 +8,6 @@ dependencies = [
     "langchain",
     "langchain-community",
     "langchain-core",
-    "langchain-huggingface",
     "langchain-ollama",
     "langchain-openai",
     "langchain-anthropic",
@@ -16,13 +15,13 @@ dependencies = [
     "langgraph",
     "langgraph-prebuilt",
     "langsmith",
-    "sentence-transformers",
     "faiss-cpu",
     "fastapi",
     "uvicorn",
     "httpx",
     "pydantic-settings",
     "python-dotenv",
+    "fastembed>=0.8.0",
 ]
 
 [build-system]

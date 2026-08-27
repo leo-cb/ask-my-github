@@ -1,12 +1,14 @@
-"""Embedding model factory supporting local, cloud, and Ollama providers."""
+"""Embedding model factory supporting FastEmbed (local) and OpenAI (cloud) providers."""
+
+from typing import Any
 
 from langchain_core.embeddings import Embeddings
-from langchain_huggingface import HuggingFaceEmbeddings
+from pydantic import PrivateAttr
 
 from ask_my_github.config import Settings, get_settings
 
 
-EMBEDDING_PROVIDERS = frozenset({"huggingface", "openai", "ollama"})
+EMBEDDING_PROVIDERS = frozenset({"fastembed", "openai"})
 
 
 def get_embeddings() -> Embeddings:
@@ -18,16 +20,40 @@ def get_embeddings() -> Embeddings:
             "EMBEDDING_PROVIDER is not set. Set it in .env to choose the "
             f"embedding provider: {', '.join(sorted(EMBEDDING_PROVIDERS))}"
         )
-    if provider == "huggingface":
-        return HuggingFaceEmbeddings(model_name=settings.embedding_model)
+    if provider == "fastembed":
+        return FastEmbedAdapter(model_name=settings.embedding_model)
     if provider == "openai":
         return _openai_embeddings(settings)
-    if provider == "ollama":
-        return _ollama_embeddings(settings)
     raise ValueError(
         f"Unknown EMBEDDING_PROVIDER '{provider}'. "
         f"Expected one of: {', '.join(sorted(EMBEDDING_PROVIDERS))}"
     )
+
+
+class FastEmbedAdapter(Embeddings):
+    """LangChain-compatible wrapper around fastembed's TextEmbedding.
+
+    Runs ONNX-optimized models locally via ONNX Runtime, which is
+    significantly faster than the sentence-transformers backend it replaces.
+    """
+
+    model_name: str
+    cache_dir: str | None = None
+    _model: Any = PrivateAttr()
+
+    def __init__(self, model_name: str, cache_dir: str | None = None) -> None:
+        super().__init__(model_name=model_name, cache_dir=cache_dir)
+        from fastembed import TextEmbedding
+
+        self._model = TextEmbedding(model_name=model_name, cache_dir=cache_dir)
+
+    def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        """Return dense embeddings for a batch of documents."""
+        return [embedding.tolist() for embedding in self._model.embed(texts)]
+
+    def embed_query(self, text: str) -> list[float]:
+        """Return the dense embedding for a single query."""
+        return next(self._model.embed([text])).tolist()
 
 
 def _openai_embeddings(settings: Settings) -> Embeddings:
@@ -36,13 +62,4 @@ def _openai_embeddings(settings: Settings) -> Embeddings:
     return OpenAIEmbeddings(
         model=settings.embedding_model,
         api_key=settings.openai_api_key,
-    )
-
-
-def _ollama_embeddings(settings: Settings) -> Embeddings:
-    from langchain_ollama import OllamaEmbeddings
-
-    return OllamaEmbeddings(
-        model=settings.embedding_model,
-        base_url=settings.ollama_base_url,
     )
