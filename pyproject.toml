@@ -10,10 +10,19 @@ dependencies = [
     "langchain-core",
     "langchain-huggingface",
     "langchain-ollama",
+    "langchain-openai",
+    "langchain-anthropic",
+    "langchain-text-splitters",
+    "langgraph",
+    "langgraph-prebuilt",
+    "langsmith",
     "sentence-transformers",
     "faiss-cpu",
     "fastapi",
     "uvicorn",
+    "httpx",
+    "pydantic-settings",
+    "python-dotenv",
 ]
 
 [build-system]
