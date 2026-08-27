@@ -35,7 +35,7 @@ class Settings(BaseSettings):
 
     embedding_provider: str | None = None
     embedding_model: str = "jinaai/jina-embeddings-v2-base-code"
-    faiss_dir: str = "./data/faiss"
+    faiss_dir: str = "./.data/faiss"
     max_file_bytes: int = 200_000
     max_concurrency: int = 8
     chunk_size: int = 1000

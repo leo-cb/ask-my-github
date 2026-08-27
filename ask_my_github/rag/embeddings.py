@@ -42,9 +42,11 @@ class FastEmbedAdapter(Embeddings):
     _model: Any = PrivateAttr()
 
     def __init__(self, model_name: str, cache_dir: str | None = None) -> None:
-        super().__init__(model_name=model_name, cache_dir=cache_dir)
+        super().__init__()
         from fastembed import TextEmbedding
 
+        self.model_name = model_name
+        self.cache_dir = cache_dir
         self._model = TextEmbedding(model_name=model_name, cache_dir=cache_dir)
 
     def embed_documents(self, texts: list[str]) -> list[list[float]]:
