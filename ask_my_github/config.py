@@ -20,8 +20,11 @@ class Settings(BaseSettings):
 
     openai_api_key: str | None = None
     anthropic_api_key: str | None = None
+    deepseek_api_key: str | None = None
     openai_model: str = "gpt-4o-mini"
     anthropic_model: str = "claude-3-5-sonnet-latest"
+    deepseek_model: str = "deepseek-chat"
+    deepseek_base_url: str = "https://api.deepseek.com"
 
     ollama_model: str = "llama3.2"
     ollama_base_url: str = "http://localhost:11434"

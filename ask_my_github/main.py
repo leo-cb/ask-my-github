@@ -11,11 +11,11 @@ from ask_my_github.rag.store import load_vector_store
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(application: FastAPI):
     settings = get_settings()
     configure_tracing(settings)
     if settings.github_username:
-        app.state.vector_store = load_vector_store(settings.github_username)
+        application.state.vector_store = load_vector_store(settings.github_username)
     yield
 
 

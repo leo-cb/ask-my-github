@@ -31,6 +31,11 @@ def _build_chat_model(settings: Settings, provider: str) -> BaseChatModel:
     }
     if provider == "ollama":
         kwargs["base_url"] = settings.ollama_base_url
+    if provider == "deepseek":
+        kwargs["model_provider"] = "openai"
+        kwargs["base_url"] = settings.deepseek_base_url
+        if settings.deepseek_api_key:
+            kwargs["api_key"] = settings.deepseek_api_key
     return init_chat_model(**kwargs)
 
 
@@ -39,4 +44,5 @@ def _model_for(settings: Settings, provider: str) -> str:
         "openai": settings.openai_model,
         "anthropic": settings.anthropic_model,
         "ollama": settings.ollama_model,
+        "deepseek": settings.deepseek_model,
     }[provider]

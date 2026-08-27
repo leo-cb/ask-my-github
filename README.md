@@ -14,7 +14,7 @@ with LangSmith.
 - **Agentic path** — a Corrective RAG LangGraph with query rewriting, document
   grading, and a ReAct tool-agent fallback (GitHub code search / file read).
 - Path selected via `IS_FAST_RAG`.
-- Cloud (OpenAI/Anthropic) and local (Ollama) LLMs, switchable per path.
+- Cloud (OpenAI/Anthropic/DeepSeek) and local (Ollama) LLMs, switchable per path.
 - LangSmith tracing for the agentic graph and chains.
 - FAISS index persisted to disk per user.
 
@@ -37,8 +37,9 @@ Copy `.env.example` to `.env` and fill in what you need. Key variables:
 | Variable | Purpose | Default |
 |----------|---------|---------|
 | `IS_FAST_RAG` | `1` = fast one-shot; anything else = agentic | unset (agentic) |
-| `LLM_PROVIDER` | `openai` \| `anthropic` \| `ollama` | fast→ollama, agentic→openai |
+| `LLM_PROVIDER` | `openai` \| `anthropic` \| `deepseek` \| `ollama` | fast→ollama, agentic→openai |
 | `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` | cloud credentials | — |
+| `DEEPSEEK_API_KEY` / `DEEPSEEK_MODEL` | DeepSeek (OpenAI-compatible, tool-calling) | `deepseek-chat` |
 | `OLLAMA_MODEL` | any locally installed Ollama model (e.g. `qwen2.5-coder`) | `llama3.2` |
 | `GITHUB_TOKEN` | GitHub auth for higher rate limits | — |
 | `LANGCHAIN_API_KEY` | enables LangSmith tracing | — |
