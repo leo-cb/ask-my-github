@@ -19,6 +19,19 @@ _DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 _MAX_BYTES = 10 * 1024 * 1024  # Rotate the log file after 10 MB.
 _BACKUP_COUNT = 5  # Keep up to five rotated log files.
 
+# Third-party loggers that are noisy at INFO (per-request HTTP logs, runtime
+# internals, model loader chatter). Their INFO output is suppressed and only
+# WARNING and above surfaces, keeping the console readable during ingestion.
+_NOISY_LOGGERS = frozenset({
+    "httpx",
+    "httpcore",
+    "urllib3",
+    "fastembed",
+    "onnxruntime",
+    "faiss",
+    "asyncio",
+})
+
 
 def setup_logging(settings: Settings | None = None) -> None:
     """Configure the root logger once for the whole process.
@@ -33,6 +46,11 @@ def setup_logging(settings: Settings | None = None) -> None:
 
     root = logging.getLogger()
     root.setLevel(_level(settings.log_level))
+
+    # Silence noisy third-party loggers so their INFO chatter does not drown
+    # out the application's own log lines.
+    for name in _NOISY_LOGGERS:
+        logging.getLogger(name).setLevel(logging.WARNING)
 
     # A second call (e.g. reload during development) must not stack handlers.
     if root.handlers:
