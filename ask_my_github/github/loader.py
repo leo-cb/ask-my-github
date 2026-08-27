@@ -8,6 +8,9 @@ import httpx
 from langchain_core.documents import Document
 
 from ask_my_github.config import get_settings
+from ask_my_github.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 GITHUB_API_BASE = "https://api.github.com"
 RAW_BASE = "https://raw.githubusercontent.com"
@@ -82,11 +85,14 @@ class GitHubLoader:
         """Load all indexable files across a user's repositories."""
         async with self._build_client() as client:
             repos = await self._list_user_repos(client, username)
+            logger.info("Found %d repositories for user '%s'", len(repos), username)
             semaphore = asyncio.Semaphore(get_settings().max_concurrency)
             results = await asyncio.gather(
                 *(self._load_repo(client, semaphore, username, repo) for repo in repos)
             )
-        return [document for documents in results for document in documents]
+        documents = [document for documents in results for document in documents]
+        logger.info("Loaded %d documents total for user '%s'", len(documents), username)
+        return documents
 
     def _build_client(self) -> httpx.AsyncClient:
         headers = {"Accept": "application/vnd.github+json"}
@@ -120,11 +126,15 @@ class GitHubLoader:
         username: str,
         repo: dict,
     ) -> list[Document]:
+        repo_name = repo["name"]
         paths = await self._list_repo_files(client, semaphore, username, repo)
+        logger.info("Repository '%s': %d indexable files", repo_name, len(paths))
         documents = await asyncio.gather(
             *(self._fetch_file(client, semaphore, username, repo, path) for path in paths)
         )
-        return [document for document in documents if document is not None]
+        loaded = [document for document in documents if document is not None]
+        logger.info("Repository '%s': fetched %d/%d files", repo_name, len(loaded), len(paths))
+        return loaded
 
     async def _list_repo_files(
         self,
@@ -178,6 +188,7 @@ class GitHubLoader:
     async def _respect_rate_limit(self, response: httpx.Response) -> None:
         remaining = int(response.headers.get("x-ratelimit-remaining", "0"))
         if remaining <= RATE_LIMIT_FLOOR:
+            logger.warning("GitHub rate limit low (%d remaining); backing off %.0fs", remaining, RATE_LIMIT_BACKOFF_SECONDS)
             await asyncio.sleep(RATE_LIMIT_BACKOFF_SECONDS)
 
 

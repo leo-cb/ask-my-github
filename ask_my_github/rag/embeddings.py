@@ -6,6 +6,9 @@ from langchain_core.embeddings import Embeddings
 from pydantic import PrivateAttr
 
 from ask_my_github.config import Settings, get_settings
+from ask_my_github.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 
 EMBEDDING_PROVIDERS = frozenset({"fastembed", "openai"})
@@ -20,6 +23,7 @@ def get_embeddings() -> Embeddings:
             "EMBEDDING_PROVIDER is not set. Set it in .env to choose the "
             f"embedding provider: {', '.join(sorted(EMBEDDING_PROVIDERS))}"
         )
+    logger.info("Initializing embeddings: provider=%s model=%s", provider, settings.embedding_model)
     if provider == "fastembed":
         return FastEmbedAdapter(model_name=settings.embedding_model)
     if provider == "openai":
@@ -47,7 +51,9 @@ class FastEmbedAdapter(Embeddings):
 
         self.model_name = model_name
         self.cache_dir = cache_dir
+        logger.info("Loading FastEmbed model '%s' (first run may download)", model_name)
         self._model = TextEmbedding(model_name=model_name, cache_dir=cache_dir)
+        logger.info("FastEmbed model '%s' ready", model_name)
 
     def embed_documents(self, texts: list[str]) -> list[list[float]]:
         """Return dense embeddings for a batch of documents."""

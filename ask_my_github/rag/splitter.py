@@ -4,6 +4,9 @@ from langchain_core.documents import Document
 from langchain_text_splitters import Language, RecursiveCharacterTextSplitter
 
 from ask_my_github.config import get_settings
+from ask_my_github.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 
 def split_documents(documents: list[Document]) -> list[Document]:
@@ -17,6 +20,7 @@ def split_documents(documents: list[Document]) -> list[Document]:
             settings.chunk_overlap,
         )
         chunks.extend(splitter.split_documents([document]))
+    logger.info("Split %d documents into %d chunks", len(documents), len(chunks))
     return chunks
 
 

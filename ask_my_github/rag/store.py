@@ -6,19 +6,25 @@ from langchain_community.vectorstores import FAISS
 from langchain_core.documents import Document
 
 from ask_my_github.config import get_settings
+from ask_my_github.logging_config import get_logger
 from ask_my_github.rag.embeddings import get_embeddings
 from ask_my_github.rag.splitter import split_documents
+
+logger = get_logger(__name__)
 
 
 def build_vector_store(documents: list[Document]) -> FAISS:
     """Build a FAISS vector store from repository documents."""
     chunks = split_documents(documents)
+    logger.info("Embedding %d chunks into FAISS", len(chunks))
     return FAISS.from_documents(chunks, get_embeddings())
 
 
 def save_vector_store(vector_store: FAISS, username: str) -> None:
     """Persist the vector store to disk for the given username."""
-    vector_store.save_local(str(store_path(username)))
+    path = store_path(username)
+    vector_store.save_local(str(path))
+    logger.info("Saved vector store to '%s'", path)
 
 
 def load_vector_store(username: str) -> FAISS | None:
@@ -26,6 +32,7 @@ def load_vector_store(username: str) -> FAISS | None:
     path = store_path(username)
     if not path.exists():
         return None
+    logger.info("Loading persisted vector store from '%s'", path)
     # Local FAISS indexes are pickled; this flag is required to load them.
     return FAISS.load_local(
         str(path),

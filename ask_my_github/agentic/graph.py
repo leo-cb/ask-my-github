@@ -23,8 +23,11 @@ from ask_my_github.agentic.tools import (
     read_github_file,
     search_github_code,
 )
+from ask_my_github.logging_config import get_logger
 from ask_my_github.rag.llm import get_agentic_chat_model
 from ask_my_github.rag.retriever import build_retriever
+
+logger = get_logger(__name__)
 
 MAX_ITERATIONS = 3
 
@@ -48,6 +51,7 @@ def _compile_graph(
     llm: BaseChatModel,
     tools: list[BaseTool],
 ) -> CompiledStateGraph:
+    logger.info("Compiling agentic RAG graph with %d tools", len(tools))
     workflow = StateGraph(AgentState)
 
     workflow.add_node("retrieve", partial(retrieve_node, retriever=retriever))

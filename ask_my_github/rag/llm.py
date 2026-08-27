@@ -6,6 +6,9 @@ from langchain.chat_models import init_chat_model
 from langchain_core.language_models.chat_models import BaseChatModel
 
 from ask_my_github.config import Settings, get_settings
+from ask_my_github.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 VALID_PROVIDERS = ("openai", "anthropic", "deepseek", "ollama")
 
@@ -45,6 +48,7 @@ def _build_chat_model(settings: Settings, provider: str) -> BaseChatModel:
         kwargs["base_url"] = settings.deepseek_base_url
         if settings.deepseek_api_key:
             kwargs["api_key"] = settings.deepseek_api_key
+    logger.info("Building chat model: provider=%s model=%s", provider, kwargs["model"])
     return init_chat_model(**kwargs)
 
 

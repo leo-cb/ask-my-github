@@ -6,6 +6,9 @@ import httpx
 from langchain_core.tools import tool
 
 from ask_my_github.config import get_settings
+from ask_my_github.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 GITHUB_API_BASE = "https://api.github.com"
 MAX_SEARCH_RESULTS = 10
@@ -16,6 +19,7 @@ MAX_FILE_CHARS = 8000
 @tool
 def search_github_code(query: str) -> str:
     """Search GitHub for code matching the query. Returns matching repo paths."""
+    logger.info("Tool 'search_github_code': query='%s'", query)
     response = httpx.get(
         f"{GITHUB_API_BASE}/search/code",
         params={"q": query, "per_page": MAX_SEARCH_RESULTS},
@@ -34,6 +38,7 @@ def search_github_code(query: str) -> str:
 @tool
 def list_repo_files(owner: str, repo: str) -> str:
     """List file paths in a GitHub repository using the git tree API."""
+    logger.info("Tool 'list_repo_files': owner='%s' repo='%s'", owner, repo)
     response = httpx.get(
         f"{GITHUB_API_BASE}/repos/{owner}/{repo}/git/trees/HEAD",
         params={"recursive": "1"},
@@ -49,6 +54,7 @@ def list_repo_files(owner: str, repo: str) -> str:
 @tool
 def read_github_file(owner: str, repo: str, path: str) -> str:
     """Read a single file from a GitHub repository using the contents API."""
+    logger.info("Tool 'read_github_file': owner='%s' repo='%s' path='%s'", owner, repo, path)
     response = httpx.get(
         f"{GITHUB_API_BASE}/repos/{owner}/{repo}/contents/{path}",
         headers=_headers(),

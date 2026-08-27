@@ -46,6 +46,10 @@ class Settings(BaseSettings):
     langchain_project: str = "ask-my-github"
     langchain_endpoint: str | None = None
 
+    log_dir: str = "./.logs"
+    log_file: str = "app.log"
+    log_level: str = "INFO"
+
     @property
     def use_fast_rag(self) -> bool:
         """Return True only when IS_FAST_RAG is exactly "1"."""
