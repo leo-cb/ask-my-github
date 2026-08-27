@@ -1,19 +1,28 @@
 # Ask My GitHub
 
-Fetches GitHub repositories for a user, loads README content, and builds a FAISS vector store with sentence-transformer embeddings. Intended as a small building block for RAG-style exploration of GitHub repos.
+A general-purpose retrieval-augmented generation (RAG) system specialized for
+GitHub and code. It scrapes a user's public repositories (all important source
+files, not just the README), builds a FAISS index, and answers questions with a
+fast one-shot RAG path or a slower agentic path built on LangGraph — both traced
+with LangSmith.
 
 ## Features
 
-- Load public repositories for a GitHub username
-- Fetch and include repository README content
-- Build a FAISS vector store with Hugging Face embeddings
-- Query indexed repos via a FastAPI API
+- Async, parallel scrape of whole repositories (source files + high-signal
+  metadata files), with language-aware chunking.
+- **Fast path** — one-shot RAG using LangChain LCEL (cloud or local Ollama LLM).
+- **Agentic path** — a Corrective RAG LangGraph with query rewriting, document
+  grading, and a ReAct tool-agent fallback (GitHub code search / file read).
+- Path selected via `IS_FAST_RAG`.
+- Cloud (OpenAI/Anthropic/DeepSeek) and local (Ollama) LLMs, switchable per path.
+- LangSmith tracing for the agentic graph and chains.
+- FAISS index persisted to disk per user.
 
 ## Requirements
 
 - Python 3.12+
 - [uv](https://docs.astral.sh/uv/) for dependency management
-- GitHub token (optional, recommended for higher rate limits)
+- GitHub token (recommended for higher rate limits)
 
 ## Install
 
@@ -21,45 +30,23 @@ Fetches GitHub repositories for a user, loads README content, and builds a FAISS
 uv sync
 ```
 
-This installs all dependencies into a virtual environment managed by `uv`.
+## Configuration
 
-## Secret scanning (GitHub Actions)
+Copy `.env.example` to `.env` and fill in what you need. Key variables:
 
-Secrets (API keys, tokens, passwords) are detected by
-[gitleaks-action](https://github.com/gitleaks/gitleaks-action), defined in
-[.github/workflows/gitleaks.yml](.github/workflows/gitleaks.yml). It runs on
-every push and pull request, and once daily on a schedule.
-
-There is nothing to install locally — the scan runs in GitHub Actions.
-
-- For personal accounts, no setup is required.
-- For organization accounts, a free `GITLEAKS_LICENSE` secret is required (see
-  [gitleaks.io](https://gitleaks.io/)).
+| Variable | Purpose | Default |
+|----------|---------|---------|
+| `IS_FAST_RAG` | `1` = fast one-shot; anything else = agentic | unset (agentic) |
+| `LLM_PROVIDER` | `openai` \| `anthropic` \| `deepseek` \| `ollama` | **required** (no default) |
+| `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` | cloud credentials | — |
+| `DEEPSEEK_API_KEY` / `DEEPSEEK_MODEL` | DeepSeek (OpenAI-compatible, tool-calling) | `deepseek-chat` |
+| `OLLAMA_MODEL` | any locally installed Ollama model (e.g. `qwen2.5-coder`) | `llama3.2` |
+| `EMBEDDING_PROVIDER` | `huggingface` (local) \| `openai` (cloud) \| `ollama` (local) | **required** (no default) |
+| `EMBEDDING_MODEL` | model for the embedding provider (sentence-transformers / `text-embedding-3-small` / `nomic-embed-text`) | `sentence-transformers/all-MiniLM-L6-v2` |
+| `GITHUB_TOKEN` | GitHub auth for higher rate limits | — |
+| `LANGCHAIN_API_KEY` | enables LangSmith tracing | — |
 
 ## Usage
-
-### Load repositories
-
-```python
-from ask_my_github.github.loader import GitHubLoader
-
-loader = GitHubLoader(token="YOUR_GITHUB_TOKEN")
-repos = loader.load_user_repos("octocat")
-
-print(repos[0]["content"])
-```
-
-### Build a vector store
-
-```python
-from ask_my_github.github.loader import GitHubLoader
-from ask_my_github.rag.embeddings import build_vector_store
-
-loader = GitHubLoader(token="YOUR_GITHUB_TOKEN")
-repos = loader.load_user_repos("octocat")
-
-vector_store = build_vector_store(repos)
-```
 
 ### Run the API
 
@@ -69,15 +56,18 @@ uvicorn ask_my_github.main:app --reload
 
 ### API endpoints
 
-- `POST /ingest/github` with JSON body `{"username": "octocat"}`
-- `POST /query` with JSON body `{"question": "What does this repo do?"}`
+- `POST /ingest/github` with JSON body `{"username": "octocat"}` — scrapes the
+  user's repos, builds and persists the FAISS index.
+- `POST /query` with JSON body `{"question": "..."}` — answers using the fast or
+  agentic path depending on `IS_FAST_RAG`.
 
 ## Notes
 
-- If you do not provide a token, GitHub API rate limits are much lower.
-- README content is fetched via the GitHub REST API and decoded as UTF-8.
-- The API stores the vector store in memory; call `/ingest/github` before `/query`.
-- The `/query` endpoint uses Ollama at `http://localhost:11434`.
+- The agentic path's ReAct tool fallback requires a **tool-calling-capable**
+  model. The default agentic provider is OpenAI (`gpt-4o-mini`), which works out
+  of the box. If you switch the agentic path to Ollama, use a model with solid
+  tool-calling support (e.g. `qwen2.5-coder`). `llama3.2` supports tools too,
+  but smaller models can be unreliable at emitting valid tool calls.
 
 ## Project Structure
 
@@ -85,6 +75,7 @@ uvicorn ask_my_github.main:app --reload
 ask_my_github/
   __init__.py
   main.py
+  config.py
   api/
     __init__.py
     ingest.py
@@ -95,8 +86,17 @@ ask_my_github/
   rag/
     __init__.py
     embeddings.py
+    llm.py
     prompt.py
     retriever.py
+    splitter.py
+    store.py
+  agentic/
+    __init__.py
+    state.py
+    tools.py
+    nodes.py
+    graph.py
 .github/
   workflows/
     gitleaks.yml
