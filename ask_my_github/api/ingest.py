@@ -3,8 +3,8 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from app.github.loader import GitHubLoader
-from app.rag.embeddings import build_vector_store
+from ask_my_github.github.loader import GitHubLoader
+from ask_my_github.rag.embeddings import build_vector_store
 
 router = APIRouter()
 
@@ -25,7 +25,7 @@ def ingest_github(request: GitHubIngestRequest):
         vector_store = build_vector_store(repo_documents)
 
         # TEMP: store in global app state (we'll improve this later)
-        from app.main import app
+        from ask_my_github.main import app
         app.state.vector_store = vector_store
 
         return {

@@ -1,8 +1,8 @@
 """Main API application file."""
 
 from fastapi import FastAPI
-from app.api.ingest import router as ingest_router
-from app.api.query import router as query_router
+from ask_my_github.api.ingest import router as ingest_router
+from ask_my_github.api.query import router as query_router
 
 app = FastAPI(title="Ask My GitHub")
 

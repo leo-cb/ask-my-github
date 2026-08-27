@@ -1,4 +1,4 @@
-# detect secrets in your repository to prevents leaks using gitleaks
+# detect secrets in your repository to prevent leaks using gitleaks
 name: gitleaks
 
 on:

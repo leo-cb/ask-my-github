@@ -4,8 +4,8 @@ from pydantic import BaseModel
 from langchain_ollama import OllamaLLM
 from langchain_classic.chains.retrieval_qa.base import RetrievalQA
 
-from app.rag.retriever import build_retriever
-from app.rag.prompt import RECRUITER_PROMPT
+from ask_my_github.rag.retriever import build_retriever
+from ask_my_github.rag.prompt import RECRUITER_PROMPT
 
 router = APIRouter()
 
@@ -16,7 +16,7 @@ class QueryRequest(BaseModel):
 
 @router.post("/query")
 def query_github(request: QueryRequest):
-    from app.main import app
+    from ask_my_github.main import app
 
     vector_store = getattr(app.state, "vector_store", None)
 

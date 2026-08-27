@@ -162,7 +162,7 @@ wheels = [
 [[package]]
 name = "ask-my-github"
 version = "0.1.0"
-source = { virtual = "." }
+source = { editable = "." }
 dependencies = [
     { name = "faiss-cpu" },
     { name = "fastapi" },

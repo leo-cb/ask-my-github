@@ -41,7 +41,7 @@ There is nothing to install locally — the scan runs in GitHub Actions.
 ### Load repositories
 
 ```python
-from app.github.loader import GitHubLoader
+from ask_my_github.github.loader import GitHubLoader
 
 loader = GitHubLoader(token="YOUR_GITHUB_TOKEN")
 repos = loader.load_user_repos("octocat")
@@ -52,8 +52,8 @@ print(repos[0]["content"])
 ### Build a vector store
 
 ```python
-from app.github.loader import GitHubLoader
-from app.rag.embeddings import build_vector_store
+from ask_my_github.github.loader import GitHubLoader
+from ask_my_github.rag.embeddings import build_vector_store
 
 loader = GitHubLoader(token="YOUR_GITHUB_TOKEN")
 repos = loader.load_user_repos("octocat")
@@ -64,7 +64,7 @@ vector_store = build_vector_store(repos)
 ### Run the API
 
 ```bash
-uvicorn app.main:app --reload
+uvicorn ask_my_github.main:app --reload
 ```
 
 ### API endpoints
@@ -82,14 +82,18 @@ uvicorn app.main:app --reload
 ## Project Structure
 
 ```
-app/
+ask_my_github/
+  __init__.py
   main.py
   api/
+    __init__.py
     ingest.py
     query.py
   github/
+    __init__.py
     loader.py
   rag/
+    __init__.py
     embeddings.py
     prompt.py
     retriever.py
