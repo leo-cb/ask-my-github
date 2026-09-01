@@ -281,6 +281,8 @@ class GitHubLoader:
             "updated_at": repo.get("updated_at"),
             "html_url": repo.get("html_url") or "",
             "file_count": file_count,
+            "is_fork": bool(repo.get("fork", False)),
+            "parent": (repo.get("parent") or {}).get("full_name"),
         }
 
     async def _respect_rate_limit(self, response: httpx.Response) -> None:

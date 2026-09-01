@@ -34,6 +34,8 @@ CREATE TABLE IF NOT EXISTS repos (
     updated_at     TEXT,
     html_url       TEXT,
     file_count     INTEGER NOT NULL DEFAULT 0,
+    is_fork        INTEGER NOT NULL DEFAULT 0,
+    parent         TEXT,
     PRIMARY KEY (username, name)
 )
 """
@@ -57,6 +59,8 @@ _COLUMNS = (
     "updated_at",
     "html_url",
     "file_count",
+    "is_fork",
+    "parent",
 )
 
 _INSERT_SQL = (
