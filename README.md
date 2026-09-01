@@ -10,7 +10,7 @@ with LangSmith.
 
 - Async, parallel scrape of whole repositories (source files + high-signal
   metadata files), with language-aware chunking.
-- **Fast path** — one-shot RAG using LangChain LCEL (cloud or local Ollama LLM).
+- **Fast path** — one-shot RAG using LangChain LCEL (cloud or local Ollama LLM). Path selected via env var `IS_FAST_RAG` = 1.
 
   ```mermaid
   flowchart LR
@@ -22,7 +22,7 @@ with LangSmith.
 
 - **Agentic path** — a Corrective RAG LangGraph with an LLM router, query
   rewriting, document grading, and a ReAct tool-agent fallback (GitHub code
-  search / file read / repo stats).
+  search / file read / repo stats). Path selected via env var `IS_FAST_RAG` != 1 (or inexistant key)
 
   ```mermaid
   flowchart TD
@@ -43,9 +43,8 @@ with LangSmith.
   language, dates, fork status) stored in a SQLite table separate from the
   vector store. An LLM router classifies each question as `stats` (answered
   from the table) or `code` (answered from the FAISS index).
-- Path selected via `IS_FAST_RAG`.
 - Cloud (OpenAI/Anthropic/DeepSeek) and local (Ollama) LLMs, switchable per path.
-- LangSmith tracing for the agentic graph and chains.
+- LangSmith tracing for the agentic graph, chains and OpenAI embedding.
 - FAISS index and repo-stats DB persisted to disk per user.
 
 ## Requirements
