@@ -83,5 +83,6 @@ def _format_response(question: str, answer: str, documents) -> dict:
             "repo_pushed_at": document.metadata.get("repo_pushed_at"),
         }
         for document in documents
+        if document.metadata.get("doc_type") != "repo_stats"
     ]
     return {"question": question, "answer": answer, "sources": sources}

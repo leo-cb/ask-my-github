@@ -5,6 +5,7 @@ from langchain_community.vectorstores import FAISS
 from pydantic import BaseModel
 
 from ask_my_github.github.loader import GitHubLoader
+from ask_my_github.github.repo_stats import save_repo_stats
 from ask_my_github.logging_config import get_logger
 from ask_my_github.rag.store import (
     build_vector_store,
@@ -40,9 +41,10 @@ async def ingest_github(request: GitHubIngestRequest) -> dict:
 
 async def _ingest_fresh(username: str) -> FAISS:
     logger.info("No persisted store for '%s'; loading repositories", username)
-    documents = await GitHubLoader().load_repos(username)
+    documents, repo_stats = await GitHubLoader().load_repos(username)
     if not documents:
         raise ValueError(f"No repositories found for user '{username}'.")
+    save_repo_stats(username, repo_stats)
     logger.info("Loaded %d documents; building vector store", len(documents))
     vector_store = build_vector_store(documents)
     save_vector_store(vector_store, username)

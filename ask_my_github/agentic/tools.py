@@ -1,11 +1,13 @@
 """GitHub tools available to the agentic fallback."""
 
 import base64
+import json
 
 import httpx
 from langchain_core.tools import tool
 
 from ask_my_github.config import get_settings
+from ask_my_github.github.repo_stats import current_username, load_repo_stats
 from ask_my_github.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -14,6 +16,21 @@ GITHUB_API_BASE = "https://api.github.com"
 MAX_SEARCH_RESULTS = 10
 MAX_LISTED_FILES = 200
 MAX_FILE_CHARS = 8000
+
+
+@tool
+def get_repo_stats() -> str:
+    """Return per-repository statistics (commits, stars, forks, open issues,
+    language, created/pushed dates) for the ingested GitHub user. Use this for
+    aggregate or comparative questions about repositories, such as 'most commits',
+    'most stars', or 'oldest repo', which the code index cannot answer."""
+    username = current_username()
+    if not username:
+        return "No GitHub user has been ingested yet."
+    rows = load_repo_stats(username)
+    if not rows:
+        return f"No repository statistics found for user '{username}'."
+    return json.dumps(rows, default=str)
 
 
 @tool

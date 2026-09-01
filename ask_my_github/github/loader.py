@@ -81,8 +81,8 @@ class GitHubLoader:
     def __init__(self, token: str | None = None):
         self._token = token or get_settings().github_token
 
-    async def load_repos(self, username: str) -> list[Document]:
-        """Load all indexable files across a user's repositories."""
+    async def load_repos(self, username: str) -> tuple[list[Document], list[dict]]:
+        """Load all indexable files and per-repository statistics for a user."""
         async with self._build_client() as client:
             repos = await self._list_user_repos(client, username)
             logger.info("Found %d repositories for user '%s'", len(repos), username)
@@ -90,9 +90,15 @@ class GitHubLoader:
             results = await asyncio.gather(
                 *(self._load_repo(client, semaphore, username, repo) for repo in repos)
             )
-        documents = [document for documents in results for document in documents]
-        logger.info("Loaded %d documents total for user '%s'", len(documents), username)
-        return documents
+        documents = [document for docs, _ in results for document in docs]
+        stats = [stats for _, stats in results]
+        logger.info(
+            "Loaded %d documents and %d repo stats for user '%s'",
+            len(documents),
+            len(stats),
+            username,
+        )
+        return documents, stats
 
     def _build_client(self) -> httpx.AsyncClient:
         headers = {"Accept": "application/vnd.github+json"}
@@ -125,7 +131,7 @@ class GitHubLoader:
         semaphore: asyncio.Semaphore,
         username: str,
         repo: dict,
-    ) -> list[Document]:
+    ) -> tuple[list[Document], dict]:
         repo_name = repo["name"]
         paths = await self._list_repo_files(client, semaphore, username, repo)
         commit_count = await self._fetch_commit_count(client, semaphore, username, repo)
@@ -136,20 +142,17 @@ class GitHubLoader:
             commit_count,
         )
         documents = await asyncio.gather(
-            *(
-                self._fetch_file(client, semaphore, username, repo, path, commit_count)
-                for path in paths
-            )
+            *(self._fetch_file(client, semaphore, username, repo, path) for path in paths)
         )
         loaded = [document for document in documents if document is not None]
-        loaded.append(self._repo_summary_document(repo, commit_count, len(loaded)))
+        stats = self._repo_stats_dict(repo, commit_count, len(loaded))
         logger.info(
-            "Repository '%s': fetched %d/%d files + overview",
+            "Repository '%s': fetched %d/%d files",
             repo_name,
-            len(loaded) - 1,
+            len(loaded),
             len(paths),
         )
-        return loaded
+        return loaded, stats
 
     async def _list_repo_files(
         self,
@@ -178,7 +181,6 @@ class GitHubLoader:
         username: str,
         repo: dict,
         path: str,
-        commit_count: int | None,
     ) -> Document | None:
         branch = repo.get("default_branch") or "main"
         url = f"{RAW_BASE}/{username}/{repo['name']}/{branch}/{quote(path)}"
@@ -201,7 +203,6 @@ class GitHubLoader:
                 "url": f"{repo['html_url']}/blob/{branch}/{path}",
                 "stars": repo.get("stargazers_count") or 0,
                 "description": repo.get("description") or "",
-                "commit_count": commit_count or 0,
                 "last_commit_date": last_commit_date,
                 "repo_pushed_at": repo.get("pushed_at"),
                 "repo_updated_at": repo.get("updated_at"),
@@ -255,44 +256,32 @@ class GitHubLoader:
         commits = response.json()
         return len(commits) if isinstance(commits, list) else None
 
-    def _repo_summary_document(
+    def _repo_stats_dict(
         self,
         repo: dict,
         commit_count: int | None,
         file_count: int,
-    ) -> Document:
-        """Build a searchable overview document summarising a repository's stats."""
-        name = repo.get("name", "")
-        description = repo.get("description") or "No description."
-        language = repo.get("language") or "unknown"
-        stars = repo.get("stargazers_count") or 0
-        created_at = repo.get("created_at") or "unknown"
-        pushed_at = repo.get("pushed_at") or "unknown"
-        content = (
-            f"Repository: {name}\n"
-            f"Description: {description}\n"
-            f"Primary language: {language}\n"
-            f"Stars: {stars}\n"
-            f"Total commits: {commit_count if commit_count is not None else 'unknown'}\n"
-            f"Indexed files: {file_count}\n"
-            f"Created at: {created_at}\n"
-            f"Last pushed at: {pushed_at}\n"
-        )
-        return Document(
-            page_content=content,
-            metadata={
-                "repo": name,
-                "path": "__repo_overview__",
-                "language": "markdown",
-                "url": repo.get("html_url") or "",
-                "stars": stars,
-                "description": description,
-                "commit_count": commit_count or 0,
-                "repo_pushed_at": pushed_at,
-                "repo_updated_at": repo.get("updated_at"),
-                "doc_type": "repo_overview",
-            },
-        )
+    ) -> dict:
+        """Flatten a repo API object into the fields persisted in the stats table."""
+        license_info = repo.get("license") or {}
+        return {
+            "name": repo.get("name", ""),
+            "description": repo.get("description") or "",
+            "language": repo.get("language") or "",
+            "stars": repo.get("stargazers_count") or 0,
+            "forks": repo.get("forks_count") or 0,
+            "open_issues": repo.get("open_issues_count") or 0,
+            "commit_count": commit_count,
+            "size_kb": repo.get("size") or 0,
+            "license": license_info.get("spdx_id") or license_info.get("name"),
+            "topics": ",".join(repo.get("topics") or []),
+            "default_branch": repo.get("default_branch") or "",
+            "created_at": repo.get("created_at"),
+            "pushed_at": repo.get("pushed_at"),
+            "updated_at": repo.get("updated_at"),
+            "html_url": repo.get("html_url") or "",
+            "file_count": file_count,
+        }
 
     async def _respect_rate_limit(self, response: httpx.Response) -> None:
         remaining = int(response.headers.get("x-ratelimit-remaining", "0"))

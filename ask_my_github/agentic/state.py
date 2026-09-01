@@ -10,6 +10,7 @@ class AgentState(TypedDict, total=False):
 
     question: str
     query: str
+    route: str
     documents: list[Document]
     generation: str
     iteration: int
