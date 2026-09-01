@@ -134,7 +134,10 @@ class GitHubLoader:
     ) -> tuple[list[Document], dict]:
         repo_name = repo["name"]
         paths = await self._list_repo_files(client, semaphore, username, repo)
-        commit_count = await self._fetch_commit_count(client, semaphore, username, repo)
+        commit_count, parent = await asyncio.gather(
+            self._fetch_commit_count(client, semaphore, username, repo),
+            self._fetch_parent(client, semaphore, username, repo),
+        )
         logger.info(
             "Repository '%s': %d indexable files, %s commits",
             repo_name,
@@ -145,7 +148,7 @@ class GitHubLoader:
             *(self._fetch_file(client, semaphore, username, repo, path) for path in paths)
         )
         loaded = [document for document in documents if document is not None]
-        stats = self._repo_stats_dict(repo, commit_count, len(loaded))
+        stats = self._repo_stats_dict(repo, commit_count, len(loaded), parent)
         logger.info(
             "Repository '%s': fetched %d/%d files",
             repo_name,
@@ -256,11 +259,35 @@ class GitHubLoader:
         commits = response.json()
         return len(commits) if isinstance(commits, list) else None
 
+    async def _fetch_parent(
+        self,
+        client: httpx.AsyncClient,
+        semaphore: asyncio.Semaphore,
+        username: str,
+        repo: dict,
+    ) -> str | None:
+        """Return the repository this one was forked from, or None if not a fork.
+
+        The ``/users/{username}/repos`` list endpoint omits the ``parent`` and
+        ``source`` fields, so we fetch the single-repo endpoint for forks only.
+        """
+        if not repo.get("fork"):
+            return None
+        url = f"{GITHUB_API_BASE}/repos/{username}/{repo['name']}"
+        async with semaphore:
+            response = await client.get(url)
+        if response.status_code != 200:
+            return None
+        await self._respect_rate_limit(response)
+        payload = response.json()
+        return (payload.get("parent") or payload.get("source") or {}).get("full_name")
+
     def _repo_stats_dict(
         self,
         repo: dict,
         commit_count: int | None,
         file_count: int,
+        parent: str | None = None,
     ) -> dict:
         """Flatten a repo API object into the fields persisted in the stats table."""
         license_info = repo.get("license") or {}
@@ -282,7 +309,7 @@ class GitHubLoader:
             "html_url": repo.get("html_url") or "",
             "file_count": file_count,
             "is_fork": bool(repo.get("fork", False)),
-            "parent": (repo.get("parent") or {}).get("full_name"),
+            "parent": parent,
         }
 
     async def _respect_rate_limit(self, response: httpx.Response) -> None:

@@ -85,9 +85,11 @@ def _format_repo_stats(rows: list[dict[str, Any]]) -> str:
     """Render repository statistics rows as readable text for the LLM."""
     lines = ["Per-repository statistics:"]
     for row in rows:
-        fork_note = (
-            f" (fork of {row['parent']})" if row.get("is_fork") and row.get("parent") else ""
-        )
+        if row.get("is_fork"):
+            parent = row.get("parent")
+            fork_note = f" (fork of {parent})" if parent else " (fork)"
+        else:
+            fork_note = ""
         lines.append(
             f"- {row['name']}{fork_note}: {row['commit_count'] or 0} commits, "
             f"{row['stars']} stars, {row['forks']} forks, "
