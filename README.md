@@ -29,14 +29,14 @@ with LangSmith.
       A[START] --> B[Route — LLM router]
       B -->|stats| C[Stats node — SQLite repo-stats table]
       B -->|code| D[Retrieve — FAISS retriever]
-      C --> E[Generate]
+      C --> E[Generate — answer]
       D --> F[Grade — document grader]
       F -->|relevant| E
       F -->|irrelevant, iterations < 3| G[Transform query — rewrite]
       G --> D
       F -->|irrelevant, iterations = 3| H[Tool fallback — ReAct agent]
       H --> I[GitHub code search / file read / repo stats]
-      E --> J[END]
+      E --> J[Answer + sources]
       I --> J
   ```
 - **Repo-level stats table** — per-repository facts (commits, stars, forks,
