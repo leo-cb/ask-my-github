@@ -26,19 +26,33 @@ with LangSmith.
 ## Requirements
 
 - Python 3.12+
-- [uv](https://docs.astral.sh/uv/) for dependency management
+
+
+**Optional:**
+- [Ollama](https://ollama.com/download) installed (if you wish to run local LLMs)
+- One of these: OpenAI/Anthropic/Deepseek API key (you can use local models with Ollama instead)
+- [uv](https://docs.astral.sh/uv/) (for dependency management; pip also works)
 - GitHub token (recommended for higher rate limits)
+- Langsmith API key (cloud LLMs tracing)
 
 ## Install
 
-If you don't have `uv` yet, install it first (it's a single binary / PyPI
+**Option 1 - with pip:**
+
+```bash
+pip install -e .
+```
+
+**Option 2 - with uv:**
+
+1) If you don't have `uv` yet, install it first (it's a single binary / PyPI
 package):
 
 ```bash
 pip install uv
 ```
 
-Then sync the project dependencies:
+2) Then sync the project dependencies:
 
 ```bash
 uv sync
