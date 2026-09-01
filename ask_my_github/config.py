@@ -1,8 +1,8 @@
 """Application settings loaded from environment variables or a .env file."""
 
-import os
 from functools import lru_cache
 
+from dotenv import load_dotenv
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -63,11 +63,12 @@ def get_settings() -> Settings:
 
 
 def configure_tracing(settings: Settings) -> None:
-    """Enable LangSmith tracing when an API key is configured."""
+    """Enable LangSmith tracing using the values in the .env file.
+
+    LangSmith's client reads its configuration (API key, project, endpoint,
+    tracing flag) directly from environment variables, so we load the .env file
+    into the process environment and let it consume those values as-is.
+    """
+    load_dotenv()
     if not settings.langchain_api_key:
         return
-    os.environ["LANGCHAIN_TRACING_V2"] = "true"
-    os.environ["LANGCHAIN_API_KEY"] = settings.langchain_api_key
-    os.environ["LANGCHAIN_PROJECT"] = settings.langchain_project
-    if settings.langchain_endpoint:
-        os.environ["LANGCHAIN_ENDPOINT"] = settings.langchain_endpoint
