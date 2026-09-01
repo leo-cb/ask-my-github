@@ -2,7 +2,7 @@
 
 import asyncio
 from pathlib import Path
-from urllib.parse import quote
+from urllib.parse import parse_qs, quote, urlparse
 
 import httpx
 from langchain_core.documents import Document
@@ -98,7 +98,7 @@ class GitHubLoader:
         headers = {"Accept": "application/vnd.github+json"}
         if self._token:
             headers["Authorization"] = f"Bearer {self._token}"
-        return httpx.AsyncClient(headers=headers, timeout=30.0, follow_redirects=True)
+        return httpx.AsyncClient(headers=headers, timeout=120.0, follow_redirects=True)
 
     async def _list_user_repos(self, client: httpx.AsyncClient, username: str) -> list[dict]:
         repos: list[dict] = []
@@ -128,12 +128,27 @@ class GitHubLoader:
     ) -> list[Document]:
         repo_name = repo["name"]
         paths = await self._list_repo_files(client, semaphore, username, repo)
-        logger.info("Repository '%s': %d indexable files", repo_name, len(paths))
+        commit_count = await self._fetch_commit_count(client, semaphore, username, repo)
+        logger.info(
+            "Repository '%s': %d indexable files, %s commits",
+            repo_name,
+            len(paths),
+            commit_count,
+        )
         documents = await asyncio.gather(
-            *(self._fetch_file(client, semaphore, username, repo, path) for path in paths)
+            *(
+                self._fetch_file(client, semaphore, username, repo, path, commit_count)
+                for path in paths
+            )
         )
         loaded = [document for document in documents if document is not None]
-        logger.info("Repository '%s': fetched %d/%d files", repo_name, len(loaded), len(paths))
+        loaded.append(self._repo_summary_document(repo, commit_count, len(loaded)))
+        logger.info(
+            "Repository '%s': fetched %d/%d files + overview",
+            repo_name,
+            len(loaded) - 1,
+            len(paths),
+        )
         return loaded
 
     async def _list_repo_files(
@@ -163,6 +178,7 @@ class GitHubLoader:
         username: str,
         repo: dict,
         path: str,
+        commit_count: int | None,
     ) -> Document | None:
         branch = repo.get("default_branch") or "main"
         url = f"{RAW_BASE}/{username}/{repo['name']}/{branch}/{quote(path)}"
@@ -185,6 +201,7 @@ class GitHubLoader:
                 "url": f"{repo['html_url']}/blob/{branch}/{path}",
                 "stars": repo.get("stargazers_count") or 0,
                 "description": repo.get("description") or "",
+                "commit_count": commit_count or 0,
                 "last_commit_date": last_commit_date,
                 "repo_pushed_at": repo.get("pushed_at"),
                 "repo_updated_at": repo.get("updated_at"),
@@ -217,11 +234,89 @@ class GitHubLoader:
                 return date
         return None
 
+    async def _fetch_commit_count(
+        self,
+        client: httpx.AsyncClient,
+        semaphore: asyncio.Semaphore,
+        username: str,
+        repo: dict,
+    ) -> int | None:
+        """Return the total number of commits in a repository, or None if unknown."""
+        url = f"{GITHUB_API_BASE}/repos/{username}/{repo['name']}/commits"
+        params = {"per_page": "1"}
+        async with semaphore:
+            response = await client.get(url, params=params)
+        if response.status_code != 200:
+            return None
+        await self._respect_rate_limit(response)
+        last_page = _last_page_from_link(response.headers.get("link", ""))
+        if last_page is not None:
+            return last_page
+        commits = response.json()
+        return len(commits) if isinstance(commits, list) else None
+
+    def _repo_summary_document(
+        self,
+        repo: dict,
+        commit_count: int | None,
+        file_count: int,
+    ) -> Document:
+        """Build a searchable overview document summarising a repository's stats."""
+        name = repo.get("name", "")
+        description = repo.get("description") or "No description."
+        language = repo.get("language") or "unknown"
+        stars = repo.get("stargazers_count") or 0
+        created_at = repo.get("created_at") or "unknown"
+        pushed_at = repo.get("pushed_at") or "unknown"
+        content = (
+            f"Repository: {name}\n"
+            f"Description: {description}\n"
+            f"Primary language: {language}\n"
+            f"Stars: {stars}\n"
+            f"Total commits: {commit_count if commit_count is not None else 'unknown'}\n"
+            f"Indexed files: {file_count}\n"
+            f"Created at: {created_at}\n"
+            f"Last pushed at: {pushed_at}\n"
+        )
+        return Document(
+            page_content=content,
+            metadata={
+                "repo": name,
+                "path": "__repo_overview__",
+                "language": "markdown",
+                "url": repo.get("html_url") or "",
+                "stars": stars,
+                "description": description,
+                "commit_count": commit_count or 0,
+                "repo_pushed_at": pushed_at,
+                "repo_updated_at": repo.get("updated_at"),
+                "doc_type": "repo_overview",
+            },
+        )
+
     async def _respect_rate_limit(self, response: httpx.Response) -> None:
         remaining = int(response.headers.get("x-ratelimit-remaining", "0"))
         if remaining <= RATE_LIMIT_FLOOR:
             logger.warning("GitHub rate limit low (%d remaining); backing off %.0fs", remaining, RATE_LIMIT_BACKOFF_SECONDS)
             await asyncio.sleep(RATE_LIMIT_BACKOFF_SECONDS)
+
+
+def _last_page_from_link(link_header: str) -> int | None:
+    """Parse a GitHub pagination Link header and return the last page number."""
+    for part in link_header.split(","):
+        segment = part.split(";")
+        if len(segment) < 2:
+            continue
+        url, *rels = segment
+        if not any('rel="last"' in rel for rel in rels):
+            continue
+        pages = parse_qs(urlparse(url.strip().strip("<>")).query).get("page")
+        if pages:
+            try:
+                return int(pages[0])
+            except ValueError:
+                return None
+    return None
 
 
 def _should_index(entry: dict) -> bool:

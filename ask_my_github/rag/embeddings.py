@@ -103,14 +103,10 @@ class FastEmbedAdapter(Embeddings):
 
 def _openai_embeddings(settings: Settings) -> Embeddings:
     from langchain_openai import OpenAIEmbeddings
-    from langsmith.wrappers import wrap_openai
-    from openai import OpenAI
 
-    # Wrap the raw OpenAI client so every embeddings.create() call is traced
-    # with token usage and latency, even outside a LangChain callback context.
-    client = wrap_openai(OpenAI(api_key=settings.openai_api_key))
+    # OpenAIEmbeddings builds its own client from api_key/base_url; passing a
+    # raw OpenAI client here would break its internal `.create()` calls.
     return OpenAIEmbeddings(
         model=settings.embedding_model,
         api_key=settings.openai_api_key,
-        client=client,
     )

@@ -1,5 +1,7 @@
 """Nodes for the corrective RAG graph."""
 
+from typing import Any
+
 from langchain_core.documents import Document
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -49,15 +51,40 @@ def transform_query_node(state: AgentState, llm: BaseChatModel) -> dict:
 
 def generate_node(state: AgentState, llm: BaseChatModel) -> dict:
     """Generate an answer from the relevant documents."""
-    context = "\n\n".join(
-        document.page_content for document in state.get("documents", [])
-    )
-    logger.info("Generate node: answering with %d documents", len(state.get("documents", [])))
+    documents = state.get("documents", [])
+    context = _build_context(documents)
+    logger.info("Generate node: answering with %d documents", len(documents))
     messages = [
         SystemMessage(content=GENERATE_SYSTEM_PROMPT),
         HumanMessage(content=_format_prompt(state["question"], context)),
     ]
     return {"generation": llm.invoke(messages).content}
+
+
+def _build_context(documents: list[Document]) -> str:
+    """Build generation context, prepending aggregated per-repo statistics."""
+    repo_stats: dict[str, dict[str, Any]] = {}
+    for document in documents:
+        metadata = document.metadata
+        repo = metadata.get("repo")
+        if not repo:
+            continue
+        if repo not in repo_stats:
+            repo_stats[repo] = {
+                "stars": metadata.get("stars", 0),
+                "commit_count": metadata.get("commit_count", 0),
+                "pushed_at": metadata.get("repo_pushed_at"),
+                "description": metadata.get("description", ""),
+            }
+    stats_lines = [
+        f"- {repo}: {stats['commit_count']} commits, {stats['stars']} stars, "
+        f"last pushed {stats['pushed_at'] or 'unknown'}"
+        for repo, stats in sorted(repo_stats.items())
+    ]
+    stats_block = ""
+    if stats_lines:
+        stats_block = "Repository statistics:\n" + "\n".join(stats_lines) + "\n\n"
+    return stats_block + "\n\n".join(document.page_content for document in documents)
 
 
 def tool_fallback_node(state: AgentState, agent) -> dict:

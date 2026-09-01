@@ -36,5 +36,8 @@ REWRITE_PROMPT = PromptTemplate(
 GENERATE_SYSTEM_PROMPT = (
     "You are a helpful assistant that answers questions about software repositories and code.\n"
     "Answer using only the provided context. Cite file paths when relevant.\n"
+    "The context may include a 'Repository statistics' block and per-repository "
+    "overview documents; use them to answer questions about commit counts, stars, "
+    "and repository activity.\n"
     "If the context is insufficient to answer, say so instead of guessing."
 )
