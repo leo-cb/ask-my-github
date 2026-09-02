@@ -1,11 +1,11 @@
-"""Container entrypoint: pre-ingest users, then launch the Streamlit dashboard."""
+"""Container entrypoint: load persisted indexes, then launch the dashboard."""
 
 import asyncio
 import os
 import sys
 
 from ask_my_github.config import get_settings, require_cloud_llm
-from ask_my_github.github.ingest import ingest_user
+from ask_my_github.github.ingest import load_user_index
 from ask_my_github.logging_config import get_logger, setup_logging
 
 logger = get_logger(__name__)
@@ -26,10 +26,15 @@ def _parse_users(settings) -> list[str]:
 
 
 def _ingest_all(users: list[str]) -> None:
-    """Index each user up front so the dashboard loads instantly afterward."""
+    """Load each user's persisted index up front so the dashboard is instant.
+
+    This is a demo-only path: it reads from the persisted FAISS vector store
+    and SQLite repo-stats table and never scrapes GitHub in real time. If the
+    persisted data is missing, it fails loudly instead of triggering a scrape.
+    """
     for username in users:
-        logger.info("Pre-ingesting repositories for '%s'", username)
-        asyncio.run(ingest_user(username))
+        logger.info("Loading persisted index for '%s'", username)
+        asyncio.run(load_user_index(username))
 
 
 def _launch_streamlit(port: str | None) -> None:
@@ -58,7 +63,7 @@ def _launch_streamlit(port: str | None) -> None:
 
 
 def main() -> None:
-    """Assert configuration, ingest all users, and start the dashboard."""
+    """Assert configuration, load persisted indexes, and start the dashboard."""
     setup_logging()
     settings = get_settings()
     require_cloud_llm(settings)

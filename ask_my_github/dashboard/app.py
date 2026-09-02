@@ -2,28 +2,32 @@
 
 import asyncio
 
+import pandas as pd
 import plotly.express as px
 import streamlit as st
 
 from ask_my_github.config import get_settings, require_cloud_llm
 from ask_my_github.dashboard.service import (
+    aggregate_technologies,
     extract_technologies,
     format_date,
+    format_technologies,
     get_cloud_llm,
     repo_stats_frame,
     summarize_repo,
+    technology_frequencies,
     top_by_commits,
     top_by_recent,
 )
-from ask_my_github.github.ingest import force_reindex, ingest_user
+from ask_my_github.github.ingest import load_user_index
 
 st.set_page_config(page_title="GitHub Portfolio", layout="wide")
 
 
-@st.cache_resource(show_spinner="Indexing repositories...")
+@st.cache_resource(show_spinner="Loading repositories...")
 def load_user(username: str):
-    """Ingest (or load) a user's vector store and return it once."""
-    return asyncio.run(ingest_user(username))
+    """Load a user's persisted vector store once (demo-only, no live indexing)."""
+    return asyncio.run(load_user_index(username))
 
 
 @st.cache_resource(show_spinner=False)
@@ -40,18 +44,8 @@ def cached_summary(username: str, repo_name: str) -> str:
 
 @st.cache_data(show_spinner="Analyzing technologies...")
 def cached_technologies(username: str) -> dict:
-    """Extract languages and libraries for a user (cached)."""
-    return extract_technologies(load_user(username), get_llm(), username)
-
-
-def _reindex_user(username: str) -> None:
-    """Delete and rebuild a user's index, then clear cached artifacts."""
-    with st.spinner(f"Reindexing repositories for '{username}'..."):
-        asyncio.run(force_reindex(username))
-    load_user.clear()
-    cached_summary.clear()
-    cached_technologies.clear()
-    st.rerun()
+    """Extract per-repository technologies for a user (cached)."""
+    return extract_technologies(load_user(username), get_llm())
 
 
 def _usernames() -> list[str]:
@@ -76,18 +70,13 @@ def render_user_tab(username: str) -> None:
 
     st.subheader(f"@{username}")
 
-    header_left, header_right = st.columns([3, 1])
-    with header_right:
-        if st.button("Reindex", key=f"reindex_{username}", help="Delete and rebuild the index for this user"):
-            _reindex_user(username)
-
     total_repos = len(frame)
     total_commits = int(frame["author_commit_count"].sum())
     total_stars = int(frame["stars"].sum())
     total_forks = int(frame["forks"].sum())
     metric1, metric2, metric3, metric4 = st.columns(4)
     metric1.metric("Repositories", total_repos)
-    metric2.metric("Your commits", total_commits)
+    metric2.metric("User commits", total_commits)
     metric3.metric("Stars", total_stars)
     metric4.metric("Forks", total_forks)
 
@@ -103,16 +92,19 @@ def render_user_tab(username: str) -> None:
         )
     with chart_right:
         st.markdown("**Commits by repository**")
-        commits = frame[["name", "author_commit_count"]].set_index("name")["author_commit_count"]
+        commits = (
+            frame[["name", "author_commit_count"]]
+            .set_index("name")["author_commit_count"]
+            .sort_values(ascending=False)
+        )
         st.bar_chart(commits)
+
+    technologies = cached_technologies(username)
 
     st.markdown("### Most active repositories")
     for _, row in top_by_commits(frame, 5).iterrows():
         with st.expander(f"{row['name']} — {int(row['author_commit_count'])} commits"):
-            st.markdown(
-                f"**Language:** {row['language'] or 'unknown'} · "
-                f"**Stars:** {int(row['stars'])}"
-            )
+            st.markdown(f"**Language:** {row['language'] or 'unknown'}")
             if row.get("description"):
                 st.markdown(f"> {row['description']}")
             st.markdown(cached_summary(username, row["name"]))
@@ -122,31 +114,40 @@ def render_user_tab(username: str) -> None:
     recent = top_by_recent(frame, 5)
     recent_display = recent.copy()
     recent_display["Pushed"] = recent_display["author_pushed_at"].apply(format_date)
+    recent_display["Technologies"] = recent_display["name"].apply(
+        lambda name: format_technologies(technologies.get(name, {}))
+    )
     st.dataframe(
         recent_display[
-            ["name", "Pushed", "author_commit_count", "language", "stars"]
+            ["name", "Pushed", "author_commit_count", "language", "Technologies"]
         ].rename(
             columns={
                 "name": "Repository",
                 "author_commit_count": "Commits",
                 "language": "Language",
-                "stars": "Stars",
             }
         ),
         hide_index=True,
     )
 
     st.markdown("### Technologies")
-    technologies = cached_technologies(username)
-    if not technologies:
-        st.info("No dependency files indexed, so technologies could not be extracted.")
+    aggregated = aggregate_technologies(technologies)
+    frequencies = technology_frequencies(technologies)
+    if not aggregated:
+        st.info("No source code indexed, so technologies could not be extracted.")
     else:
-        for language, libraries in technologies.items():
+        for language, libraries in aggregated.items():
             st.markdown(f"**{language}**")
             if libraries:
                 st.markdown(" · ".join(f"`{library}`" for library in libraries))
             else:
                 st.markdown("_no libraries detected_")
+        if frequencies:
+            st.markdown("**Most used technologies**")
+            usage = pd.DataFrame(
+                frequencies, columns=["Technology", "Repositories"]
+            ).set_index("Technology")
+            st.bar_chart(usage, horizontal=True)
 
     st.markdown("### Repository detail")
     names = frame["name"].tolist()
@@ -168,7 +169,7 @@ def _render_repo_detail(username: str, row) -> None:
     column1.markdown(f"**Language:** {row.get('language') or 'unknown'}")
     column1.markdown(f"**License:** {row.get('license') or '—'}")
     column1.markdown(f"**Size:** {row.get('size_kb') or 0} KB")
-    column2.markdown(f"**Your commits:** {int(row.get('author_commit_count') or 0)}")
+    column2.markdown(f"**User commits:** {int(row.get('author_commit_count') or 0)}")
     column2.markdown(f"**Stars:** {int(row.get('stars') or 0)}")
     column2.markdown(f"**Forks:** {int(row.get('forks') or 0)}")
     column3.markdown(f"**Created:** {format_date(row.get('created_at'))}")

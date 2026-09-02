@@ -8,7 +8,11 @@ centralizes that so the two entry points stay consistent.
 from langchain_community.vectorstores import FAISS
 
 from ask_my_github.github.loader import GitHubLoader
-from ask_my_github.github.repo_stats import clear_repo_stats, save_repo_stats
+from ask_my_github.github.repo_stats import (
+    clear_repo_stats,
+    load_repo_stats,
+    save_repo_stats,
+)
 from ask_my_github.logging_config import get_logger
 from ask_my_github.rag.store import (
     build_vector_store,
@@ -46,12 +50,32 @@ async def ingest_user(username: str) -> FAISS:
     return vector_store
 
 
+async def load_user_index(username: str) -> FAISS:
+    """Load a user's persisted index without scraping (demo-only path).
+
+    Raises ``FileNotFoundError`` when the vector store or repo-stats table is
+    missing, so the demo fails loudly instead of triggering a live scrape.
+    """
+    vector_store = load_vector_store(username)
+    if vector_store is None:
+        raise FileNotFoundError(
+            f"No persisted vector store for '{username}'. Run ingestion first "
+            "to build it."
+        )
+    if not load_repo_stats(username):
+        raise FileNotFoundError(
+            f"No persisted repo stats for '{username}'. Run ingestion first "
+            "to build them."
+        )
+    logger.info("Loaded persisted index for user '%s'", username)
+    return vector_store
+
+
 async def force_reindex(username: str) -> FAISS:
     """Delete and rebuild a user's vector store and repo-stats table.
 
-    Used by the dashboard's Reindex action when the persisted data is stale
-    (e.g. missing newly introduced author metadata). It clears both on-disk
-    artifacts before delegating to the normal ingest flow.
+    Clears both on-disk artifacts before delegating to the normal ingest flow.
+    Kept for administrative/API use; the demo dashboard loads data read-only.
     """
     logger.info("Forcing reindex for user '%s'", username)
     clear_vector_store(username)

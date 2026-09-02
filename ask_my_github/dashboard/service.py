@@ -16,7 +16,7 @@ from ask_my_github.rag.llm import get_fast_chat_model
 logger = get_logger(__name__)
 
 SUMMARY_K = 8
-TECH_SEARCH_K = 200
+TECH_SEARCH_K = 30
 MAX_TECH_CHUNKS = 40
 MAX_TECH_PER_LANGUAGE = 15
 
@@ -28,6 +28,24 @@ _DEPENDENCY_FILES = frozenset({
     "gemfile", "composer.json", "build.gradle", "build.gradle.kts",
     "pom.xml", "project.clj", "stack.yaml", "mix.exs",
 })
+
+# Canonical display names for technologies the LLM may spell differently.
+_TECH_ALIASES = {
+    "sklearn": "scikit-learn",
+    "pil": "Pillow",
+    "langchain_core": "langchain-core",
+    "langchain core": "langchain-core",
+    "flaskform": "flask-wtf",
+    "flask_wtf": "flask-wtf",
+    "opencv": "opencv-python",
+    "github actions": "GitHub Actions",
+    "github-actions": "GitHub Actions",
+    "docker compose": "Docker Compose",
+    "docker-compose": "Docker Compose",
+}
+
+# Low-signal tokens that are not meaningful "technologies" to surface.
+_IGNORED_TECH = frozenset({"pip", "uv", "git", "sqlite3", "docker hub"})
 
 
 def get_cloud_llm() -> BaseChatModel:
@@ -48,7 +66,12 @@ def summarize_repo(
     by the ``repo`` metadata key) and asks the LLM to summarize them.
     """
     query = f"What does the repository {repo_name} do? Purpose and main features."
-    documents = vector_store.similarity_search(query, k=k, filter={"repo": repo_name})
+    documents = vector_store.similarity_search(
+        query,
+        k=k,
+        filter={"repo": repo_name},
+        fetch_k=vector_store.index.ntotal,
+    )
     if not documents:
         return "No indexed content available for this repository."
     context = "\n\n".join(document.page_content for document in documents)
@@ -58,37 +81,127 @@ def summarize_repo(
 def extract_technologies(
     vector_store: FAISS,
     llm: BaseChatModel,
-    username: str | None = None,
-) -> dict[str, list[str]]:
-    """Extract languages and libraries from dependency/manifest chunks in FAISS.
+) -> dict[str, dict[str, list[str]]]:
+    """Extract languages and libraries from each repository's source code.
 
-    Searches the vector store for dependency-related content, keeps only the
-    manifest-file chunks authored by ``username`` (so libraries from forks
-    written by others are excluded), and asks the LLM to return a JSON mapping
-    of language to libraries, capped at ``MAX_TECH_PER_LANGUAGE`` each.
+    For every repository in the store, retrieves a representative sample of
+    source-code chunks (excluding dependency manifests) and asks the LLM, one
+    repository at a time, for the languages and third-party libraries actually
+    imported or used there. The LLM also filters out low-level and
+    standard-library modules. Each language is capped at
+    ``MAX_TECH_PER_LANGUAGE`` libraries.
     """
-    query = "dependencies libraries frameworks packages requirements"
-    documents = vector_store.similarity_search(query, k=TECH_SEARCH_K)
-    manifest_docs = [
+    per_repo: dict[str, dict[str, list[str]]] = {}
+    for repo_name in _distinct_repos(vector_store):
+        libraries = _extract_repo_technologies(vector_store, llm, repo_name)
+        if libraries:
+            per_repo[repo_name] = {
+                language: _dedupe_libraries(libs)[:MAX_TECH_PER_LANGUAGE]
+                for language, libs in libraries.items()
+            }
+    return per_repo
+
+
+def _distinct_repos(vector_store: FAISS) -> list[str]:
+    """Return the sorted list of repository names present in the store."""
+    repos = {
+        document.metadata.get("repo")
+        for document in vector_store.docstore._dict.values()
+    }
+    return sorted(repo for repo in repos if repo)
+
+
+def _extract_repo_technologies(
+    vector_store: FAISS,
+    llm: BaseChatModel,
+    repo_name: str,
+) -> dict[str, list[str]]:
+    """Return one repository's language→libraries mapping via the LLM."""
+    query = (
+        "import, require, or usage of third-party libraries, frameworks, "
+        "packages, and modules in source code"
+    )
+    documents = vector_store.similarity_search(
+        query,
+        k=TECH_SEARCH_K,
+        filter={"repo": repo_name},
+        fetch_k=vector_store.index.ntotal,
+    )
+    code_docs = [
         document
         for document in documents
-        if _is_dependency_file(document.metadata.get("path"))
-        and _is_author_match(document, username)
+        if not _is_dependency_file(document.metadata.get("path"))
     ][:MAX_TECH_CHUNKS]
-    if not manifest_docs:
-        logger.info("No author manifest chunks found; technology extraction skipped")
+    if not code_docs:
         return {}
     context = "\n\n".join(
-        f"--- {document.metadata.get('repo', '?')} / "
-        f"{document.metadata.get('path', '?')} ---\n{document.page_content}"
-        for document in manifest_docs
+        f"--- {document.metadata.get('path', '?')} "
+        f"({document.metadata.get('language') or 'unknown'}) ---\n"
+        f"{document.page_content}"
+        for document in code_docs
     )
-    raw = _invoke_text(llm, TECHNOLOGIES_PROMPT.format(context=context))
-    technologies = _parse_json_object(raw)
+    raw = _invoke_text(
+        llm, TECHNOLOGIES_PROMPT.format(repo_name=repo_name, context=context)
+    )
+    return _parse_language_json(raw)
+
+
+def aggregate_technologies(
+    per_repo: dict[str, dict[str, list[str]]],
+) -> dict[str, list[str]]:
+    """Merge per-repo technologies into a single language→libraries mapping.
+
+    Preserves first-seen order while deduplicating libraries across repos, so
+    more commonly seen libraries surface first. Each language stays capped at
+    ``MAX_TECH_PER_LANGUAGE``.
+    """
+    by_language: dict[str, list[str]] = {}
+    for languages in per_repo.values():
+        for language, libraries in languages.items():
+            by_language.setdefault(language, []).extend(libraries)
     return {
-        language: libraries[:MAX_TECH_PER_LANGUAGE]
-        for language, libraries in technologies.items()
+        language: _dedupe_libraries(libraries)[:MAX_TECH_PER_LANGUAGE]
+        for language, libraries in by_language.items()
     }
+
+
+def technology_frequencies(
+    per_repo: dict[str, dict[str, list[str]]],
+) -> list[tuple[str, int]]:
+    """Count how many repositories use each technology.
+
+    Returns ``(technology, count)`` tuples ordered from most to least used.
+    A technology is counted once per repository even if it appears under
+    multiple languages, so the count reflects repo-level adoption.
+    """
+    counts: dict[str, int] = {}
+    display: dict[str, str] = {}
+    for languages in per_repo.values():
+        seen_in_repo: set[str] = set()
+        for library in {library for libs in languages.values() for library in libs}:
+            canonical = _canonical_tech(library)
+            if canonical is None:
+                continue
+            key = canonical.lower()
+            if key in seen_in_repo:
+                continue
+            seen_in_repo.add(key)
+            counts[key] = counts.get(key, 0) + 1
+            display.setdefault(key, canonical)
+    return sorted(
+        ((display[key], counts[key]) for key in counts),
+        key=lambda item: (-item[1], item[0].lower()),
+    )
+
+
+def format_technologies(languages: dict[str, list[str]]) -> str:
+    """Render a repository's language→libraries mapping as a short string."""
+    parts = [
+        f"{language}: {', '.join(libraries)}"
+        for language, libraries in languages.items()
+        if libraries
+    ]
+    return " · ".join(parts) if parts else "—"
 
 
 def repo_stats_frame(username: str) -> pd.DataFrame:
@@ -150,19 +263,28 @@ def _is_dependency_file(path: str | None) -> bool:
     return Path(path).name.lower() in _DEPENDENCY_FILES
 
 
-def _is_author_match(document, username: str | None) -> bool:
-    """Return True when a document was authored by ``username``.
+def _canonical_tech(name: str) -> str | None:
+    """Return a technology's canonical display name, or None to drop it."""
+    key = name.strip().lower()
+    if key in _IGNORED_TECH:
+        return None
+    return _TECH_ALIASES.get(key, name.strip())
 
-    When no username filter is requested, all documents match. When the
-    document's author is unknown, it is retained so dependency files without
-    author metadata are not silently dropped.
-    """
-    if not username:
-        return True
-    author = document.metadata.get("author")
-    if not author:
-        return True
-    return author.lower() == username.lower()
+
+def _dedupe_libraries(libraries: list[str]) -> list[str]:
+    """Canonicalize and de-duplicate a list of technology names, in order."""
+    result: list[str] = []
+    seen: set[str] = set()
+    for library in libraries:
+        canonical = _canonical_tech(library)
+        if canonical is None:
+            continue
+        key = canonical.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append(canonical)
+    return result
 
 
 def _invoke_text(llm: BaseChatModel, text: str) -> str:
@@ -172,7 +294,7 @@ def _invoke_text(llm: BaseChatModel, text: str) -> str:
     return content if isinstance(content, str) else str(content)
 
 
-def _parse_json_object(raw: str) -> dict[str, list[str]]:
+def _parse_language_json(raw: str) -> dict[str, list[str]]:
     """Parse a language→libraries JSON object from an LLM response.
 
     Tolerates markdown code fences and surrounding prose by extracting the

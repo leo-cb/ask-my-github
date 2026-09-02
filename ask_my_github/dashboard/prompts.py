@@ -15,17 +15,32 @@ REPO_SUMMARY_PROMPT = PromptTemplate(
 )
 
 TECHNOLOGIES_PROMPT = PromptTemplate(
-    input_variables=["context"],
+    input_variables=["repo_name", "context"],
     template=(
-        "Analyze the dependency and manifest files below.\n"
-        "Identify the programming languages used and the libraries/frameworks "
-        "associated with each language.\n"
-        "Return ONLY a JSON object mapping each language to a list of its "
-        "libraries/frameworks.\n"
-        "List at most 15 libraries/frameworks per language.\n"
-        'Example: {{"Python": ["pandas", "fastapi"], "JavaScript": ["react"]}}\n'
-        "Include a language even if its library list is empty.\n\n"
-        "Manifest content:\n{context}\n\n"
+        "The excerpts below are files from the repository '{repo_name}'.\n"
+        "Identify the technologies actually used: (1) programming languages with "
+        "the third-party libraries/frameworks imported or used in the code, and "
+        "(2) DevOps/infrastructure tools and platforms (such as Docker, "
+        "Kubernetes, Jenkins, Ansible, Terraform, Tomcat, Maven, GitHub Actions, "
+        "AWS, GCP, etc.) when the content is configuration, deployment, or CI/CD "
+        "related.\n"
+        "Base your answer ONLY on what is visible in the content: imports and "
+        "usage in code, and tool names referenced in configs, Dockerfiles, "
+        "deployment manifests, and CI/CD files.\n"
+        "Use the canonical package name (e.g. 'scikit-learn' not 'sklearn', "
+        "'Pillow' not 'PIL'). Do not invent tools that are not visible.\n"
+        "Exclude low-level/utility modules and standard-library modules (such as "
+        "os, sys, json, re, datetime, itertools, typing, pathlib, collections, "
+        "subprocess, functools, abc, networkx, pickleshare) and list only "
+        "meaningful, user-facing libraries, frameworks, and tools.\n"
+        "List at most 15 items per language/tool group, ordered from most to "
+        "least used. Put DevOps/infrastructure tools under the key "
+        '"DevOps & Infra".\n'
+        "Return ONLY a JSON object mapping each language or tool group to a list "
+        "of its technologies.\n"
+        'Example: {{"Python": ["pandas", "fastapi"], "JavaScript": ["react"], '
+        '"DevOps & Infra": ["docker", "kubernetes"]}}\n\n'
+        "Files:\n{context}\n\n"
         "JSON:"
     ),
 )
