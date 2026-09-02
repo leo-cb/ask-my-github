@@ -1,10 +1,8 @@
 # Ask My GitHub
 
-A general-purpose retrieval-augmented generation (RAG) system specialized for
-GitHub and code. It scrapes a user's public repositories (all important source
-files, not just the README), builds a FAISS index, and answers questions with a
-fast one-shot RAG path or a slower agentic path built on LangGraph — both traced
-with LangSmith.
+A retrieval-augmented generation (RAG) system specialized for
+GitHub and code. It scrapes a user's public repositories using Github API, builds a FAISS index, and answers questions with a
+fast one-shot RAG path or a slower agentic path built on LangGraph.
 
 ## Features
 
