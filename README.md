@@ -123,6 +123,36 @@ uvicorn ask_my_github.main:app --reload
 - `POST /query` with JSON body `{"question": "..."}` — answers using the fast or
   agentic path depending on `IS_FAST_RAG`.
 
+## Dashboard
+
+A Streamlit dashboard renders portfolio metrics for one or more GitHub users
+(one tab each). It reads repository metadata from the `repos` SQLite table and
+uses the FAISS index plus a cloud LLM to produce per-repository summaries and
+to extract the languages and libraries used.
+
+Requirements:
+
+- A **cloud** LLM provider (`openai`, `anthropic`, or `deepseek`) — the
+  dashboard rejects `ollama`.
+- `DASHBOARD_USERS` set to a comma-separated list of GitHub usernames, e.g.
+  `DASHBOARD_USERS=octocat,another-user`.
+
+Run locally:
+
+```bash
+streamlit run ask_my_github/dashboard/app.py
+```
+
+Or with Docker:
+
+```bash
+docker build -t ask-my-github-dashboard .
+docker run -p 8501:8501 --env-file .env -v ./.data:/app/.data ask-my-github-dashboard
+```
+
+The dashboard indexes each user on first run and persists the result under
+`.data/`, so subsequent launches are fast and require no GitHub API access.
+
 ## Notes
 
 - The agentic path's router and ReAct tool fallback require a

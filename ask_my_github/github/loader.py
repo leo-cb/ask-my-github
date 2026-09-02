@@ -134,21 +134,31 @@ class GitHubLoader:
     ) -> tuple[list[Document], dict]:
         repo_name = repo["name"]
         paths = await self._list_repo_files(client, semaphore, username, repo)
-        commit_count, parent = await asyncio.gather(
+        commit_count, author_commit_count, author_pushed_at, parent = await asyncio.gather(
             self._fetch_commit_count(client, semaphore, username, repo),
+            self._fetch_commit_count(client, semaphore, username, repo, author=username),
+            self._fetch_author_pushed_at(client, semaphore, username, repo),
             self._fetch_parent(client, semaphore, username, repo),
         )
         logger.info(
-            "Repository '%s': %d indexable files, %s commits",
+            "Repository '%s': %d indexable files, %s commits (%s by author)",
             repo_name,
             len(paths),
             commit_count,
+            author_commit_count,
         )
         documents = await asyncio.gather(
             *(self._fetch_file(client, semaphore, username, repo, path) for path in paths)
         )
         loaded = [document for document in documents if document is not None]
-        stats = self._repo_stats_dict(repo, commit_count, len(loaded), parent)
+        stats = self._repo_stats_dict(
+            repo,
+            commit_count,
+            len(loaded),
+            parent,
+            author_commit_count=author_commit_count,
+            author_pushed_at=author_pushed_at,
+        )
         logger.info(
             "Repository '%s': fetched %d/%d files",
             repo_name,
@@ -194,7 +204,7 @@ class GitHubLoader:
         content = response.text
         if not content.strip():
             return None
-        last_commit_date = await self._fetch_last_commit_date(
+        author_login, last_commit_date = await self._fetch_last_commit_date(
             client, semaphore, username, repo, path
         )
         return Document(
@@ -206,6 +216,7 @@ class GitHubLoader:
                 "url": f"{repo['html_url']}/blob/{branch}/{path}",
                 "stars": repo.get("stargazers_count") or 0,
                 "description": repo.get("description") or "",
+                "author": author_login,
                 "last_commit_date": last_commit_date,
                 "repo_pushed_at": repo.get("pushed_at"),
                 "repo_updated_at": repo.get("updated_at"),
@@ -219,24 +230,30 @@ class GitHubLoader:
         username: str,
         repo: dict,
         path: str,
-    ) -> str | None:
-        """Return the ISO-8601 date of the last commit touching a file, or None."""
+    ) -> tuple[str | None, str | None]:
+        """Return ``(author_login, date)`` of the last commit touching a file.
+
+        The commit's author login is captured alongside the date so chunks can
+        later be filtered to the user's own commits (e.g. excluding fork code
+        authored by someone else). Either value may be None when unknown.
+        """
         url = f"{GITHUB_API_BASE}/repos/{username}/{repo['name']}/commits"
         params = {"path": path, "per_page": "1"}
         async with semaphore:
             response = await client.get(url, params=params)
         if response.status_code != 200:
-            return None
+            return None, None
         await self._respect_rate_limit(response)
         commits = response.json()
         if not commits:
-            return None
+            return None, None
+        author_login = (commits[0].get("author") or {}).get("login")
         commit = commits[0].get("commit", {})
         for key in ("committer", "author"):
             date = (commit.get(key) or {}).get("date")
             if date:
-                return date
-        return None
+                return author_login, date
+        return author_login, None
 
     async def _fetch_commit_count(
         self,
@@ -244,10 +261,17 @@ class GitHubLoader:
         semaphore: asyncio.Semaphore,
         username: str,
         repo: dict,
+        author: str | None = None,
     ) -> int | None:
-        """Return the total number of commits in a repository, or None if unknown."""
+        """Return the number of commits in a repository, or None if unknown.
+
+        When ``author`` is given, only commits authored by that login are
+        counted, which excludes commits inherited from a fork's upstream.
+        """
         url = f"{GITHUB_API_BASE}/repos/{username}/{repo['name']}/commits"
-        params = {"per_page": "1"}
+        params: dict = {"per_page": "1"}
+        if author:
+            params["author"] = author
         async with semaphore:
             response = await client.get(url, params=params)
         if response.status_code != 200:
@@ -258,6 +282,36 @@ class GitHubLoader:
             return last_page
         commits = response.json()
         return len(commits) if isinstance(commits, list) else None
+
+    async def _fetch_author_pushed_at(
+        self,
+        client: httpx.AsyncClient,
+        semaphore: asyncio.Semaphore,
+        username: str,
+        repo: dict,
+    ) -> str | None:
+        """Return the ISO-8601 date of the user's most recent authored commit.
+
+        Uses the same ``author`` filter as ``_fetch_commit_count`` so a fork's
+        "pushed" date reflects only the user's own work, or None when they have
+        never committed to the repository.
+        """
+        url = f"{GITHUB_API_BASE}/repos/{username}/{repo['name']}/commits"
+        params = {"author": username, "per_page": "1"}
+        async with semaphore:
+            response = await client.get(url, params=params)
+        if response.status_code != 200:
+            return None
+        await self._respect_rate_limit(response)
+        commits = response.json()
+        if not isinstance(commits, list) or not commits:
+            return None
+        commit = commits[0].get("commit", {})
+        for key in ("committer", "author"):
+            date = (commit.get(key) or {}).get("date")
+            if date:
+                return date
+        return None
 
     async def _fetch_parent(
         self,
@@ -288,6 +342,8 @@ class GitHubLoader:
         commit_count: int | None,
         file_count: int,
         parent: str | None = None,
+        author_commit_count: int | None = None,
+        author_pushed_at: str | None = None,
     ) -> dict:
         """Flatten a repo API object into the fields persisted in the stats table."""
         license_info = repo.get("license") or {}
@@ -299,12 +355,14 @@ class GitHubLoader:
             "forks": repo.get("forks_count") or 0,
             "open_issues": repo.get("open_issues_count") or 0,
             "commit_count": commit_count,
+            "author_commit_count": author_commit_count,
             "size_kb": repo.get("size") or 0,
             "license": license_info.get("spdx_id") or license_info.get("name"),
             "topics": ",".join(repo.get("topics") or []),
             "default_branch": repo.get("default_branch") or "",
             "created_at": repo.get("created_at"),
             "pushed_at": repo.get("pushed_at"),
+            "author_pushed_at": author_pushed_at,
             "updated_at": repo.get("updated_at"),
             "html_url": repo.get("html_url") or "",
             "file_count": file_count,

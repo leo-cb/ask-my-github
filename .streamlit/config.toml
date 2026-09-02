@@ -1,0 +1,3 @@
+[client]
+# Hide Streamlit's default "Deploy" button and other developer toolbar options.
+toolbarMode = "viewer"
