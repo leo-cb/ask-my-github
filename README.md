@@ -1,44 +1,91 @@
 # Ask My GitHub
 
-A general-purpose retrieval-augmented generation (RAG) system specialized for
-GitHub and code. It scrapes a user's public repositories (all important source
-files, not just the README), builds a FAISS index, and answers questions with a
-fast one-shot RAG path or a slower agentic path built on LangGraph — both traced
-with LangSmith.
+A retrieval-augmented generation (RAG) system specialized for
+GitHub and code. It scrapes a user's public repositories using Github API, builds a FAISS index, and answers questions with a
+fast one-shot RAG path or a slower agentic path built on LangGraph.
 
 ## Features
 
 - Async, parallel scrape of whole repositories (source files + high-signal
   metadata files), with language-aware chunking.
-- **Fast path** — one-shot RAG using LangChain LCEL (cloud or local Ollama LLM).
+- **Fast path** — one-shot RAG using LangChain LCEL (cloud or local Ollama LLM). Path selected via env var `IS_FAST_RAG` = 1.
+
+  ```mermaid
+  flowchart LR
+      A[User question] --> B[FAISS retriever]
+      B --> C[Top-k relevant chunks]
+      C --> D[QA prompt + LLM]
+      D --> E[Answer + sources]
+  ```
+
 - **Agentic path** — a Corrective RAG LangGraph with an LLM router, query
   rewriting, document grading, and a ReAct tool-agent fallback (GitHub code
-  search / file read / repo stats).
+  search / file read / repo stats). Path selected via env var `IS_FAST_RAG` != 1 (or inexistant key)
+
+  ```mermaid
+  flowchart TD
+      A[START] --> B[Route — LLM router]
+      B -->|stats| C[Stats node — SQLite repo-stats table]
+      B -->|code| D[Retrieve — FAISS retriever]
+      C --> E[Generate — answer]
+      D --> F[Grade — document grader]
+      F -->|relevant| E
+      F -->|irrelevant, iterations < 3| G[Transform query — rewrite]
+      G --> D
+      F -->|irrelevant, iterations = 3| H[Tool fallback — ReAct agent]
+      H --> I[GitHub code search / file read / repo stats]
+      E --> J[Answer + sources]
+      I --> J
+  ```
 - **Repo-level stats table** — per-repository facts (commits, stars, forks,
   language, dates, fork status) stored in a SQLite table separate from the
   vector store. An LLM router classifies each question as `stats` (answered
   from the table) or `code` (answered from the FAISS index).
-- Path selected via `IS_FAST_RAG`.
 - Cloud (OpenAI/Anthropic/DeepSeek) and local (Ollama) LLMs, switchable per path.
-- LangSmith tracing for the agentic graph and chains.
+- LangSmith tracing for the agentic graph, chains and OpenAI embedding.
 - FAISS index and repo-stats DB persisted to disk per user.
 
 ## Requirements
 
 - Python 3.12+
-- [uv](https://docs.astral.sh/uv/) for dependency management
+
+
+**Optional:**
+- [Ollama](https://ollama.com/download) installed (if you wish to run local LLMs)
+- One of these: OpenAI/Anthropic/Deepseek API key (you can use local models with Ollama instead)
+- [uv](https://docs.astral.sh/uv/) (for dependency management; pip also works)
 - GitHub token (recommended for higher rate limits)
+- Langsmith API key (cloud LLMs tracing)
 
 ## Install
 
-If you don't have `uv` yet, install it first (it's a single binary / PyPI
+### With pip
+
+1. Clone this repository to your local machine:
+```bash
+git clone https://github.com/leo-cb/ask-my-github.git
+```
+
+2. Install dependencies:
+```bash
+pip install -e .
+```
+
+### With uv
+
+1. Clone this repository to your local machine:
+```bash
+git clone https://github.com/leo-cb/ask-my-github.git
+```
+
+2. If you don't have `uv` yet, install it first (it's a single binary / PyPI
 package):
 
 ```bash
 pip install uv
 ```
 
-Then sync the project dependencies:
+3. Then sync the project dependencies:
 
 ```bash
 uv sync
