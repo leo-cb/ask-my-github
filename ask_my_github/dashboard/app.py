@@ -2,7 +2,6 @@
 
 import asyncio
 
-import pandas as pd
 import plotly.express as px
 import streamlit as st
 
@@ -15,7 +14,6 @@ from ask_my_github.dashboard.service import (
     get_cloud_llm,
     repo_stats_frame,
     summarize_repo,
-    technology_frequencies,
     top_by_commits,
     top_by_recent,
 )
@@ -92,12 +90,17 @@ def render_user_tab(username: str) -> None:
         )
     with chart_right:
         st.markdown("**Commits by repository**")
-        commits = (
-            frame[["name", "author_commit_count"]]
-            .set_index("name")["author_commit_count"]
-            .sort_values(ascending=False)
+        commits = frame[["name", "author_commit_count"]].sort_values(
+            ["author_commit_count", "name"], ascending=[False, True]
         )
-        st.bar_chart(commits)
+        commits_chart = px.bar(
+            commits,
+            x="name",
+            y="author_commit_count",
+            labels={"name": "", "author_commit_count": "Commits"},
+        )
+        commits_chart.update_layout(xaxis_title=None, yaxis_title="Commits")
+        st.plotly_chart(commits_chart, width="stretch")
 
     technologies = cached_technologies(username)
 
@@ -132,7 +135,6 @@ def render_user_tab(username: str) -> None:
 
     st.markdown("### Technologies")
     aggregated = aggregate_technologies(technologies)
-    frequencies = technology_frequencies(technologies)
     if not aggregated:
         st.info("No source code indexed, so technologies could not be extracted.")
     else:
@@ -142,12 +144,6 @@ def render_user_tab(username: str) -> None:
                 st.markdown(" · ".join(f"`{library}`" for library in libraries))
             else:
                 st.markdown("_no libraries detected_")
-        if frequencies:
-            st.markdown("**Most used technologies**")
-            usage = pd.DataFrame(
-                frequencies, columns=["Technology", "Repositories"]
-            ).set_index("Technology")
-            st.bar_chart(usage, horizontal=True)
 
     st.markdown("### Repository detail")
     names = frame["name"].tolist()

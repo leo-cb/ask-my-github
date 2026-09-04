@@ -1,11 +1,11 @@
-"""Container entrypoint: load persisted indexes, then launch the dashboard."""
+"""Container entrypoint: ingest users, then launch the dashboard."""
 
 import asyncio
 import os
 import sys
 
 from ask_my_github.config import get_settings, require_cloud_llm
-from ask_my_github.github.ingest import load_user_index
+from ask_my_github.github.ingest import ingest_user
 from ask_my_github.logging_config import get_logger, setup_logging
 
 logger = get_logger(__name__)
@@ -26,15 +26,20 @@ def _parse_users(settings) -> list[str]:
 
 
 def _ingest_all(users: list[str]) -> None:
-    """Load each user's persisted index up front so the dashboard is instant.
+    """Ingest each user up front so every dashboard tab is ready to render.
 
-    This is a demo-only path: it reads from the persisted FAISS vector store
-    and SQLite repo-stats table and never scrapes GitHub in real time. If the
-    persisted data is missing, it fails loudly instead of triggering a scrape.
+    Each configured user goes through the shared ingestion flow, which reuses
+    the persisted FAISS vector store and repo-stats table when present and
+    otherwise scrapes GitHub, builds the index, and persists both. A user that
+    fails (e.g. GitHub rate limits or no public repos) is skipped with a
+    warning so the remaining tabs still start.
     """
     for username in users:
-        logger.info("Loading persisted index for '%s'", username)
-        asyncio.run(load_user_index(username))
+        logger.info("Loading index for '%s'", username)
+        try:
+            asyncio.run(ingest_user(username))
+        except Exception as error:
+            logger.warning("Skipping '%s': %s", username, error)
 
 
 def _launch_streamlit(port: str | None) -> None:

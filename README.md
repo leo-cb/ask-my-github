@@ -147,7 +147,7 @@ Or with Docker:
 
 ```bash
 docker build -t ask-my-github-dashboard .
-docker run -p 8501:8501 --env-file .env -v ./.data:/app/.data ask-my-github-dashboard
+docker run -p 8505:8505 --env-file .env -v ./.data:/app/.data ask-my-github-dashboard
 ```
 
 The dashboard indexes each user on first run and persists the result under
