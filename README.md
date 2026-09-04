@@ -282,7 +282,4 @@ uv.lock
 
 ## License
 
-This project is licensed under the [MIT License](LICENSE) — you can use, copy,
-modify, merge, publish, distribute, sublicense, and sell copies of the software,
-provided the copyright notice and permission notice are preserved in substantial
-portions of the work. 
+This project is licensed under the [MIT License](LICENSE).
