@@ -279,3 +279,10 @@ Dockerfile
 pyproject.toml
 uv.lock
 ```
+
+## License
+
+This project is released into the public domain under [The Unlicense](https://unlicense.org) —
+you can copy, modify, publish, use, sell, and distribute it for any purpose,
+commercial or non-commercial, without restriction. See the [LICENSE](LICENSE) file
+for the full text.
