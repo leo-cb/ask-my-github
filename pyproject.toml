@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Fetches GitHub repositories for a user, loads README content, and builds a FAISS vector store with sentence-transformer embeddings."
 readme = "README.md"
 requires-python = ">=3.12"
-license = "Unlicense"
+license = "MIT"
 dependencies = [
     "langchain",
     "langchain-community",

@@ -282,7 +282,9 @@ uv.lock
 
 ## License
 
-This project is released into the public domain under [The Unlicense](https://unlicense.org) —
-you can copy, modify, publish, use, sell, and distribute it for any purpose,
-commercial or non-commercial, without restriction. See the [LICENSE](LICENSE) file
-for the full text.
+This project is licensed under the [MIT License](LICENSE) — you can use, copy,
+modify, merge, publish, distribute, sublicense, and sell copies of the software,
+provided the copyright notice and permission notice are preserved in substantial
+portions of the work.
+
+Copyright (c) 2026 leo-cb
