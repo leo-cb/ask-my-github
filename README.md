@@ -104,8 +104,10 @@ Copy `.env.example` to `.env` and fill in what you need. Key variables:
 | `OLLAMA_MODEL` | any locally installed Ollama model (e.g. `qwen2.5-coder`) | `llama3.2` |
 | `EMBEDDING_PROVIDER` | `fastembed` (local, ONNX) \| `openai` (cloud) | **required** (no default) |
 | `EMBEDDING_MODEL` | model for the embedding provider (fastembed / `text-embedding-3-small`) | `jinaai/jina-embeddings-v2-base-code` |
+| `DASHBOARD_USERS` | comma-separated GitHub usernames shown by the dashboard (one tab each); each is ingested at startup | — |
 | `GITHUB_TOKEN` | GitHub auth for higher rate limits | — |
 | `LANGCHAIN_API_KEY` | enables LangSmith tracing | — |
+| `FAISS_DIR` | directory used to persist/load each user's FAISS store | `./.data/faiss` |
 
 ## Usage
 
@@ -125,33 +127,86 @@ uvicorn ask_my_github.main:app --reload
 
 ## Dashboard
 
-A Streamlit dashboard renders portfolio metrics for one or more GitHub users
-(one tab each). It reads repository metadata from the `repos` SQLite table and
-uses the FAISS index plus a cloud LLM to produce per-repository summaries and
-to extract the languages and libraries used.
+A Streamlit dashboard that renders portfolio metrics for one or more GitHub
+users (one tab per user). It reads repository metadata from the `repos`
+SQLite table, uses the FAISS index plus a cloud LLM to produce per-repository
+summaries, and extracts the languages and libraries each repository uses.
 
-Requirements:
+### Requirements
 
 - A **cloud** LLM provider (`openai`, `anthropic`, or `deepseek`) — the
-  dashboard rejects `ollama`.
+  dashboard rejects `ollama` for its summarization work.
 - `DASHBOARD_USERS` set to a comma-separated list of GitHub usernames, e.g.
   `DASHBOARD_USERS=octocat,another-user`.
 
-Run locally:
+### Run locally
 
 ```bash
 streamlit run ask_my_github/dashboard/app.py
 ```
 
-Or with Docker:
+### Run with Docker
+
+The image listens on port **8505**. The entrypoint
+(`ask_my_github.dashboard.entrypoint`) ingests **every user in
+`DASHBOARD_USERS` at startup** — reusing each user's persisted index when it
+exists, otherwise scraping GitHub, embedding, and saving it — and only then
+launches Streamlit.
 
 ```bash
 docker build -t ask-my-github-dashboard .
 docker run -p 8505:8505 --env-file .env -v ./.data:/app/.data ask-my-github-dashboard
 ```
 
-The dashboard indexes each user on first run and persists the result under
-`.data/`, so subsequent launches are fast and require no GitHub API access.
+- `.data/` is a bind mount holding the persisted FAISS index per user
+  (`.data/faiss/<username>/`) and the shared `repo_stats.db` SQLite file.
+  Keep it mounted so restarts are fast and need no GitHub API access or
+  re-embedding spend.
+- Because ingestion happens *before* Streamlit starts, the first boot of a new
+  user can take several minutes (scrape + embed); set a generous startup grace
+  period if you add a health check.
+
+### Ingesting users manually
+
+All ingestion goes through the shared `ingest_user()` flow, so the dashboard,
+the API (`POST /ingest/github`), and the CLI stay consistent. To bulk-ingest
+from the terminal:
+
+```bash
+python utils/ingest_users.py octocat another-user
+```
+
+### Deploying to a server
+
+The image contains code only — users and data live in `.env` and `.data/`, so
+ship all three. Build once on your machine, export, and load on the server:
+
+```bash
+# local: save the image (do NOT wrap it in another tar — docker load expects
+# the docker archive itself; gzip the file directly, or skip gzip)
+docker save ask-my-github-dashboard:latest -o dashboard.tar
+gzip dashboard.tar                      # → dashboard.tar.gz (optional)
+scp dashboard.tar.gz .env ubuntu@<host>:~/ask-my-github/
+scp -r .data ubuntu@<host>:~/ask-my-github/
+
+# server: load, then run with the same bind mount
+cd ~/ask-my-github
+docker load -i dashboard.tar.gz
+docker run -d --name ask-my-github-dashboard --restart unless-stopped \
+  -p 8505:8505 --env-file .env \
+  -v "$PWD/.data:/app/.data" \
+  ask-my-github-dashboard:latest
+```
+
+On Windows PowerShell there is no `gzip` command, so just copy the
+uncompressed `dashboard.tar` and gzip it on the server (`gzip dashboard.tar`)
+before `docker load -i dashboard.tar.gz`. Point a reverse proxy (e.g. Caddy)
+at port 8505 for TLS.
+
+> On every page render, summaries and technology lists are served from
+> Streamlit's in-memory cache, so no LLM calls happen after the first view.
+> The cache is not persisted, however — restarting the container regenerates
+> the summaries once (a handful of cheap DeepSeek calls per repo).
 
 ## Notes
 
@@ -177,8 +232,15 @@ ask_my_github/
     __init__.py
     ingest.py
     query.py
+  dashboard/
+    __init__.py
+    app.py
+    entrypoint.py
+    prompts.py
+    service.py
   github/
     __init__.py
+    ingest.py
     loader.py
     repo_stats.py
   rag/
@@ -195,6 +257,8 @@ ask_my_github/
     tools.py
     nodes.py
     graph.py
+utils/
+  ingest_users.py
 .github/
   workflows/
     gitleaks.yml
