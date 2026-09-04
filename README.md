@@ -117,6 +117,10 @@ Copy `.env.example` to `.env` and fill in what you need. Key variables:
 
 ## Usage
 
+Two interfaces are available: an **HTTP API** for answering questions
+programmatically, and a **Streamlit dashboard** (below) for browsing a GitHub
+user's portfolio.
+
 ### Run the API
 
 ```bash
@@ -131,27 +135,27 @@ uvicorn ask_my_github.main:app --reload
 - `POST /query` with JSON body `{"question": "..."}` — answers using the fast or
   agentic path depending on `IS_FAST_RAG`.
 
-## Dashboard
+### Dashboard
 
 A Streamlit dashboard that renders portfolio metrics for one or more GitHub
 users (one tab per user). It reads repository metadata from the `repos`
 SQLite table, uses the FAISS index plus a cloud LLM to produce per-repository
 summaries, and extracts the languages and libraries each repository uses.
 
-### Requirements
+#### Requirements
 
 - A **cloud** LLM provider (`openai`, `anthropic`, or `deepseek`) — the
   dashboard rejects `ollama` for its summarization work.
 - `DASHBOARD_USERS` set to a comma-separated list of GitHub usernames, e.g.
   `DASHBOARD_USERS=octocat,another-user`.
 
-### Run locally
+#### Run locally
 
 ```bash
 streamlit run ask_my_github/dashboard/app.py
 ```
 
-### Run with Docker
+#### Run with Docker
 
 The image listens on port **8505**. The entrypoint
 (`ask_my_github.dashboard.entrypoint`) ingests **every user in
@@ -172,7 +176,7 @@ docker run -p 8505:8505 --env-file .env -v ./.data:/app/.data ask-my-github-dash
   user can take several minutes (scrape + embed); set a generous startup grace
   period if you add a health check.
 
-### Ingesting users manually
+#### Ingesting users manually
 
 All ingestion goes through the shared `ingest_user()` flow, so the dashboard,
 the API (`POST /ingest/github`), and the CLI stay consistent. To bulk-ingest
@@ -182,7 +186,7 @@ from the terminal:
 python utils/ingest_users.py octocat another-user
 ```
 
-### Deploying to a server
+#### Deploying to a server
 
 The image contains code only — users and data live in `.env` and `.data/`, so
 ship all three. Build once on your machine, export, and load on the server:
@@ -265,9 +269,13 @@ ask_my_github/
     graph.py
 utils/
   ingest_users.py
+docs/
+  images/
+    dashboard.png
 .github/
   workflows/
     gitleaks.yml
+Dockerfile
 pyproject.toml
 uv.lock
 ```
