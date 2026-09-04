@@ -5,6 +5,8 @@ from functools import lru_cache
 from dotenv import load_dotenv
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+CLOUD_PROVIDERS = frozenset({"openai", "anthropic", "deepseek"})
+
 
 class Settings(BaseSettings):
     """Runtime configuration for Ask My GitHub."""
@@ -32,6 +34,7 @@ class Settings(BaseSettings):
 
     github_token: str | None = None
     github_username: str | None = None
+    dashboard_users: str | None = None
 
     embedding_provider: str | None = None
     embedding_model: str = "jinaai/jina-embeddings-v2-base-code"
@@ -55,11 +58,32 @@ class Settings(BaseSettings):
         """Return True only when IS_FAST_RAG is exactly "1"."""
         return self.is_fast_rag == "1"
 
+    @property
+    def is_cloud_provider(self) -> bool:
+        """Return True when the LLM provider is a cloud (non-local) provider."""
+        return self.llm_provider in CLOUD_PROVIDERS
+
 
 @lru_cache
 def get_settings() -> Settings:
     """Return a cached Settings instance."""
     return Settings()
+
+
+def require_cloud_llm(settings: Settings) -> None:
+    """Raise unless the configured LLM provider is a cloud provider.
+
+    The dashboard generates summaries and technology lists, which the local
+    Ollama path does not support, so it hard-requires a cloud model.
+    """
+    if settings.is_cloud_provider:
+        return
+    provider = settings.llm_provider or "unset"
+    raise ValueError(
+        "The dashboard requires a cloud LLM provider (openai, anthropic, or "
+        f"deepseek). LLM_PROVIDER is currently '{provider}'. Ollama is not "
+        "supported by the dashboard."
+    )
 
 
 def configure_tracing(settings: Settings) -> None:

@@ -25,12 +25,14 @@ CREATE TABLE IF NOT EXISTS repos (
     forks          INTEGER NOT NULL DEFAULT 0,
     open_issues    INTEGER NOT NULL DEFAULT 0,
     commit_count   INTEGER,
+    author_commit_count INTEGER,
     size_kb        INTEGER,
     license        TEXT,
     topics         TEXT,
     default_branch TEXT,
     created_at     TEXT,
     pushed_at      TEXT,
+    author_pushed_at TEXT,
     updated_at     TEXT,
     html_url       TEXT,
     file_count     INTEGER NOT NULL DEFAULT 0,
@@ -50,12 +52,14 @@ _COLUMNS = (
     "forks",
     "open_issues",
     "commit_count",
+    "author_commit_count",
     "size_kb",
     "license",
     "topics",
     "default_branch",
     "created_at",
     "pushed_at",
+    "author_pushed_at",
     "updated_at",
     "html_url",
     "file_count",
@@ -84,8 +88,40 @@ def save_repo_stats(username: str, repos: list[dict[str, Any]]) -> None:
     rows = [(username, *(repo.get(col) for col in _COLUMNS)) for repo in repos]
     with sqlite3.connect(path) as connection:
         connection.execute(_SCHEMA)
+        _migrate(connection)
         connection.executemany(_INSERT_SQL, rows)
     logger.info("Saved %d repo stats rows for user '%s'", len(repos), username)
+
+
+def _migrate(connection: sqlite3.Connection) -> None:
+    """Add new columns to an existing ``repos`` table when absent.
+
+    The table may predate the author-filtered columns, so this upgrades it in
+    place. ``ADD COLUMN IF NOT EXISTS`` is not supported by SQLite, so each
+    addition is guarded by inspecting ``PRAGMA table_info``.
+    """
+    columns = {
+        row[1]
+        for row in connection.execute("PRAGMA table_info(repos)").fetchall()
+    }
+    additions = {
+        "author_commit_count": "INTEGER",
+        "author_pushed_at": "TEXT",
+    }
+    for column, sql_type in additions.items():
+        if column not in columns:
+            connection.execute(f"ALTER TABLE repos ADD COLUMN {column} {sql_type}")
+    logger.info("Repo stats table columns: %s", ", ".join(sorted(columns)))
+
+
+def clear_repo_stats(username: str) -> None:
+    """Delete all persisted repository statistics for a user."""
+    path = repo_stats_db_path()
+    if not path.exists():
+        return
+    with sqlite3.connect(path) as connection:
+        connection.execute("DELETE FROM repos WHERE username = ?", (username,))
+    logger.info("Cleared repo stats rows for user '%s'", username)
 
 
 def load_repo_stats(username: str) -> list[dict[str, Any]]:

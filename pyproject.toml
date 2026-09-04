@@ -22,6 +22,9 @@ dependencies = [
     "pydantic-settings",
     "python-dotenv",
     "fastembed>=0.8.0",
+    "streamlit",
+    "pandas",
+    "plotly",
 ]
 
 [build-system]

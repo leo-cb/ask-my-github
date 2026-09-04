@@ -44,3 +44,13 @@ def load_vector_store(username: str) -> FAISS | None:
 def store_path(username: str) -> Path:
     """Return the on-disk path for a user's vector store."""
     return Path(get_settings().faiss_dir) / username
+
+
+def clear_vector_store(username: str) -> None:
+    """Delete a user's persisted vector store so it can be rebuilt."""
+    path = store_path(username)
+    if path.exists():
+        import shutil
+
+        shutil.rmtree(path, ignore_errors=True)
+        logger.info("Cleared vector store at '%s'", path)
