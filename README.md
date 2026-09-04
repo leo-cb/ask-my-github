@@ -4,6 +4,12 @@ A retrieval-augmented generation (RAG) system specialized for
 GitHub and code. It scrapes a user's public repositories using Github API, builds a FAISS index, and answers questions with a
 fast one-shot RAG path or a slower agentic path built on LangGraph.
 
+<p align="center">
+  <img src="docs/images/dashboard.png" alt="Ask My GitHub dashboard" width="800">
+  <br>
+  <em>Dashboard for a GitHub user: repo metrics come from the SQLite repo-stats table, while per-repository summaries and technologies are retrieved from the FAISS vector store.</em>
+</p>
+
 ## Features
 
 - Async, parallel scrape of whole repositories (source files + high-signal
