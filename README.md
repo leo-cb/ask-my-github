@@ -244,7 +244,8 @@ suite is a signal on the real system, not a mock.
 - **Router** — a deterministic accuracy check that the agentic router
   classifies `stats` vs `code` questions correctly (no judge, so it is cheap).
 
-All metrics share a single **DeepSeek judge pinned to `temperature=0.0`** so
+All metrics share a single **DeepSeek judge pinned to `temperature=0.0`**, and
+the eval answer model is pinned the same way, so both the answers and their
 scores are reproducible run-to-run.
 
 **Golden dataset** lives in `data/eval/` (`goldens.json` hand-curated,
