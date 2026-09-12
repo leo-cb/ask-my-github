@@ -46,10 +46,18 @@ _CLASSIFICATION_ROUTES = {
 }
 
 
-def build_agentic_graph(vector_store: FAISS) -> CompiledStateGraph:
-    """Build the agentic RAG graph for the given vector store."""
+def build_agentic_graph(
+    vector_store: FAISS, temperature: float | None = None
+) -> CompiledStateGraph:
+    """Build the agentic RAG graph for the given vector store.
+
+    Args:
+        vector_store: FAISS index backing the retriever.
+        temperature: Sampling temperature for the graph's LLM. Defaults to the
+            configured ``llm_temperature`` when omitted.
+    """
     retriever = build_retriever(vector_store)
-    llm = get_agentic_chat_model()
+    llm = get_agentic_chat_model(temperature=temperature)
     tools = [search_github_code, read_github_file, list_repo_files, get_repo_stats]
     return _compile_graph(retriever, llm, tools)
 

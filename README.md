@@ -263,7 +263,9 @@ for the eval user, resolved via `EVAL_USER` → `GITHUB_USERNAME` → first
 pytest tests/eval -q
 ```
 
-Each run makes live LLM calls (answers + judge), so iterate on single
+Answers are cached to `.data/eval/cache/<user>/` (gitignored), so repeat runs
+skip the answer LLM call and only the judge is re-invoked. Delete that cache
+to force fresh answers after changing the index or prompts. Iterate on single
 questions with `pytest tests/eval/test_fast_rag.py -k "HeartDisease" -v` and
 reserve the full suite for final verification.
 

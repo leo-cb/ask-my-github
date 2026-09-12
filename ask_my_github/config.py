@@ -47,6 +47,7 @@ class Settings(BaseSettings):
 
     eval_user: str | None = None
     eval_dataset_dir: str = "./data/eval"
+    eval_cache_dir: str = "./.data/eval/cache"
 
     langchain_api_key: str | None = None
     langchain_project: str = "ask-my-github"
