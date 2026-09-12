@@ -1,0 +1,26 @@
+[
+  {
+    "input": "What does the HeartDiseasePrediction_WebApp repository do?",
+    "expected_output": "It is a Flask app that predicts the risk of heart disease based on a Gradient-boosted Trees (GBT) ML model, and shows the confidence of the prediction as well as the factors behind the prediction (explainability)."
+  },
+  {
+    "input": "What does the anomaly-detection repository do?",
+    "expected_output": "It detects anomalous data points in a time-series using various methods and automatically stationarizes the time-series."
+  },
+  {
+    "input": "What does the wikipedia-article-summarization repository do?",
+    "expected_output": "It summarizes Wikipedia articles using a transformers T5 model, and can be used through a Python script, a FastAPI REST API, or a Streamlit web app."
+  },
+  {
+    "input": "What is the ask-my-github project?",
+    "expected_output": "It is a retrieval-augmented generation (RAG) system specialized for GitHub and code that scrapes a user's public repositories, builds a FAISS index, and answers questions."
+  },
+  {
+    "input": "What does the retouch-image repository do?",
+    "expected_output": "It retouches an image following given instructions using an image-to-image model."
+  },
+  {
+    "input": "What does the HeartDiseasePrediction_ModelDev repository do?",
+    "expected_output": "It covers heart disease prediction model development: exploratory data analysis, model development, and model explainability, using a heart disease dataset from Kaggle."
+  }
+]

@@ -28,6 +28,12 @@ dependencies = [
     "plotly",
 ]
 
+[project.optional-dependencies]
+dev = [
+    "deepeval>=4.0.0",
+    "pytest>=8.0.0",
+]
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
