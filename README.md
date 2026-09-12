@@ -230,6 +230,47 @@ at port 8505 for TLS.
   are answered from the stats table via the router; code questions go through
   the FAISS index. Re-ingest after changing scraped repos to refresh both.
 
+## Evaluation
+
+RAG quality is measured with [DeepEval](https://docs.confident-ai.com/)
+using an LLM-as-judge over a golden dataset. The harness reuses the exact
+production retrieval and answer code (fast and agentic paths), so a passing
+suite is a signal on the real system, not a mock.
+
+**Metrics**
+
+- **Retrieval** — `ContextualPrecision`, `ContextualRecall`,
+  `ContextualRelevancy`: did the FAISS retriever surface the right chunks,
+  miss ground-truth content, or dilute the prompt with noise?
+- **Generation** — `Faithfulness` (is the answer grounded in the retrieved
+  context?), `AnswerRelevancy` (does it address the question?), and a
+  G-Eval `Correctness` rubric (is it factually right about the repo/code?).
+- **Router** — a deterministic accuracy check that the agentic router
+  classifies `stats` vs `code` questions correctly (no judge, so it is cheap).
+
+All metrics share a single **DeepSeek judge pinned to `temperature=0.0`** so
+scores are reproducible run-to-run.
+
+**Golden dataset** lives in `data/eval/` (`goldens.json` hand-curated,
+`goldens_synthetic.json` generated). Generate the synthetic set from the
+current FAISS index:
+
+```bash
+python utils/generate_goldens.py <username> --count 40
+```
+
+**Run the suite** (requires `pip install -e ".[dev]"` and a persisted index
+for the eval user, resolved via `EVAL_USER` → `GITHUB_USERNAME` → first
+`DASHBOARD_USERS` entry):
+
+```bash
+pytest tests/eval -q
+```
+
+Each run makes live LLM calls (answers + judge), so iterate on single
+questions with `pytest tests/eval/test_fast_rag.py -k "HeartDisease" -v` and
+reserve the full suite for final verification.
+
 ## Project Structure
 
 ```
@@ -267,8 +308,25 @@ ask_my_github/
     tools.py
     nodes.py
     graph.py
+  eval/
+    __init__.py
+    pipeline.py
+    judge.py
+    metrics.py
+    dataset.py
 utils/
   ingest_users.py
+  generate_goldens.py
+tests/
+  eval/
+    conftest.py
+    test_retrieval.py
+    test_fast_rag.py
+    test_agentic_rag.py
+    test_router.py
+data/
+  eval/
+    goldens.json
 docs/
   images/
     dashboard.png
