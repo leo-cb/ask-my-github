@@ -46,8 +46,16 @@ fast one-shot RAG path or a slower agentic path built on LangGraph.
 - **Repo-level stats table** — per-repository facts (commits, stars, forks,
   language, dates, fork status) stored in a SQLite table separate from the
   vector store. An LLM router classifies each question as `stats` (answered
-  from the table) or `code` (answered from the FAISS index).
+  from the table) or `code` (answered from the FAISS index), so repo-level
+  questions ("most stars", "highest commits", "which are forks") hit the table
+  while code questions search the index. Re-ingest after changing scraped
+  repos to refresh both.
 - Cloud (OpenAI/Anthropic/DeepSeek) and local (Ollama) LLMs, switchable per path.
+  The agentic path's router and ReAct tool fallback require a
+  **tool-calling-capable** model — the default (`gpt-4o-mini`) works out of the
+  box, but if you switch it to Ollama use a model with solid tool support
+  (e.g. `qwen2.5-coder`); smaller models can be unreliable at emitting valid
+  tool calls.
 - LangSmith tracing for the agentic graph, chains and OpenAI embedding.
 - FAISS index and repo-stats DB persisted to disk per user.
 
@@ -217,18 +225,6 @@ at port 8505 for TLS.
 > Streamlit's in-memory cache, so no LLM calls happen after the first view.
 > The cache is not persisted, however — restarting the container regenerates
 > the summaries once (a handful of cheap DeepSeek calls per repo).
-
-## Notes
-
-- The agentic path's router and ReAct tool fallback require a
-  **tool-calling-capable** model. The default agentic provider is OpenAI
-  (`gpt-4o-mini`), which works out of the box. If you switch the agentic path to
-  Ollama, use a model with solid tool-calling support (e.g. `qwen2.5-coder`).
-  `llama3.2` supports tools too, but smaller models can be unreliable at
-  emitting valid tool calls.
-- Repo-level questions ("most stars", "highest commits", "which are forks")
-  are answered from the stats table via the router; code questions go through
-  the FAISS index. Re-ingest after changing scraped repos to refresh both.
 
 ## Evaluation
 
