@@ -13,16 +13,26 @@ logger = get_logger(__name__)
 VALID_PROVIDERS = ("openai", "anthropic", "deepseek", "ollama")
 
 
-def get_fast_chat_model() -> BaseChatModel:
-    """Return the chat model for the fast one-shot path."""
+def get_fast_chat_model(temperature: float | None = None) -> BaseChatModel:
+    """Return the chat model for the fast one-shot path.
+
+    Args:
+        temperature: Sampling temperature. Defaults to ``settings.llm_temperature``
+            when omitted.
+    """
     settings = get_settings()
-    return _build_chat_model(settings, _require_provider(settings))
+    return _build_chat_model(settings, _require_provider(settings), temperature)
 
 
-def get_agentic_chat_model() -> BaseChatModel:
-    """Return the chat model for the agentic path."""
+def get_agentic_chat_model(temperature: float | None = None) -> BaseChatModel:
+    """Return the chat model for the agentic path.
+
+    Args:
+        temperature: Sampling temperature. Defaults to ``settings.llm_temperature``
+            when omitted.
+    """
     settings = get_settings()
-    return _build_chat_model(settings, _require_provider(settings))
+    return _build_chat_model(settings, _require_provider(settings), temperature)
 
 
 def _require_provider(settings: Settings) -> str:
@@ -35,11 +45,13 @@ def _require_provider(settings: Settings) -> str:
     return provider
 
 
-def _build_chat_model(settings: Settings, provider: str) -> BaseChatModel:
+def _build_chat_model(
+    settings: Settings, provider: str, temperature: float | None = None
+) -> BaseChatModel:
     kwargs: dict[str, Any] = {
         "model": _model_for(settings, provider),
         "model_provider": provider,
-        "temperature": settings.llm_temperature,
+        "temperature": settings.llm_temperature if temperature is None else temperature,
     }
     if provider == "ollama":
         kwargs["base_url"] = settings.ollama_base_url

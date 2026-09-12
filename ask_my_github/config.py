@@ -45,6 +45,10 @@ class Settings(BaseSettings):
     chunk_overlap: int = 150
     retriever_k: int = 15
 
+    eval_user: str | None = None
+    eval_dataset_dir: str = "./data/eval"
+    eval_cache_dir: str = "./.data/eval/cache"
+
     langchain_api_key: str | None = None
     langchain_project: str = "ask-my-github"
     langchain_endpoint: str | None = None

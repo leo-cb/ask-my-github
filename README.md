@@ -46,8 +46,16 @@ fast one-shot RAG path or a slower agentic path built on LangGraph.
 - **Repo-level stats table** — per-repository facts (commits, stars, forks,
   language, dates, fork status) stored in a SQLite table separate from the
   vector store. An LLM router classifies each question as `stats` (answered
-  from the table) or `code` (answered from the FAISS index).
+  from the table) or `code` (answered from the FAISS index), so repo-level
+  questions ("most stars", "highest commits", "which are forks") hit the table
+  while code questions search the index. Re-ingest after changing scraped
+  repos to refresh both.
 - Cloud (OpenAI/Anthropic/DeepSeek) and local (Ollama) LLMs, switchable per path.
+  The agentic path's router and ReAct tool fallback require a
+  **tool-calling-capable** model — the default (`gpt-4o-mini`) works out of the
+  box, but if you switch it to Ollama use a model with solid tool support
+  (e.g. `qwen2.5-coder`); smaller models can be unreliable at emitting valid
+  tool calls.
 - LangSmith tracing for the agentic graph, chains and OpenAI embedding.
 - FAISS index and repo-stats DB persisted to disk per user.
 
@@ -218,17 +226,49 @@ at port 8505 for TLS.
 > The cache is not persisted, however — restarting the container regenerates
 > the summaries once (a handful of cheap DeepSeek calls per repo).
 
-## Notes
+## Evaluation
 
-- The agentic path's router and ReAct tool fallback require a
-  **tool-calling-capable** model. The default agentic provider is OpenAI
-  (`gpt-4o-mini`), which works out of the box. If you switch the agentic path to
-  Ollama, use a model with solid tool-calling support (e.g. `qwen2.5-coder`).
-  `llama3.2` supports tools too, but smaller models can be unreliable at
-  emitting valid tool calls.
-- Repo-level questions ("most stars", "highest commits", "which are forks")
-  are answered from the stats table via the router; code questions go through
-  the FAISS index. Re-ingest after changing scraped repos to refresh both.
+RAG quality is measured with [DeepEval](https://docs.confident-ai.com/)
+using an LLM-as-judge over a golden dataset. The harness reuses the exact
+production retrieval and answer code (fast and agentic paths), so a passing
+suite is a signal on the real system, not a mock.
+
+**Metrics**
+
+- **Retrieval** — `ContextualPrecision`, `ContextualRecall`,
+  `ContextualRelevancy`: did the FAISS retriever surface the right chunks,
+  miss ground-truth content, or dilute the prompt with noise?
+- **Generation** — `Faithfulness` (is the answer grounded in the retrieved
+  context?), `AnswerRelevancy` (does it address the question?), and a
+  G-Eval `Correctness` rubric (is it factually right about the repo/code?).
+- **Router** — a deterministic accuracy check that the agentic router
+  classifies `stats` vs `code` questions correctly (no judge, so it is cheap).
+
+All metrics share a single **DeepSeek judge pinned to `temperature=0.0`**, and
+the eval answer model is pinned the same way, so both the answers and their
+scores are reproducible run-to-run.
+
+**Golden dataset** lives in `data/eval/` (`goldens.json` hand-curated,
+`goldens_synthetic.json` generated). Generate the synthetic set from the
+current FAISS index:
+
+```bash
+python utils/generate_goldens.py <username> --count 40
+```
+
+**Run the suite** (requires `pip install -e ".[dev]"` and a persisted index
+for the eval user, resolved via `EVAL_USER` → `GITHUB_USERNAME` → first
+`DASHBOARD_USERS` entry):
+
+```bash
+pytest tests/eval -q
+```
+
+Answers are cached to `.data/eval/cache/<user>/` (gitignored), so repeat runs
+skip the answer LLM call and only the judge is re-invoked. Delete that cache
+to force fresh answers after changing the index or prompts. Iterate on single
+questions with `pytest tests/eval/test_fast_rag.py -k "HeartDisease" -v` and
+reserve the full suite for final verification.
 
 ## Project Structure
 
@@ -267,8 +307,25 @@ ask_my_github/
     tools.py
     nodes.py
     graph.py
+  eval/
+    __init__.py
+    pipeline.py
+    judge.py
+    metrics.py
+    dataset.py
 utils/
   ingest_users.py
+  generate_goldens.py
+tests/
+  eval/
+    conftest.py
+    test_retrieval.py
+    test_fast_rag.py
+    test_agentic_rag.py
+    test_router.py
+data/
+  eval/
+    goldens.json
 docs/
   images/
     dashboard.png
